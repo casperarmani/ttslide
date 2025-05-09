@@ -16,6 +16,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check if there's at least one image of each type
+    const hasAllTypes =
+      files.some(file => file.kind === 'face') &&
+      files.some(file => file.kind === 'faceless') &&
+      files.some(file => file.kind === 'product');
+
+    if (!hasAllTypes) {
+      return NextResponse.json(
+        { error: 'Need at least one image of each type (face, faceless, product)' },
+        { status: 400 }
+      );
+    }
+
     // Build user prompt
     const filesByType = {
       face: files.filter(file => file.kind === 'face'),
@@ -30,15 +43,15 @@ ${systemPrompt}
 I have uploaded images that I want to organize into TikTok slideshows. Here are the files:
 
 Face images (${filesByType.face.length}):
-${filesByType.face.map(f => `- File ID: ${f.geminiId}, Type: ${f.mime}`).join('\n')}
+${filesByType.face.map(f => `- File ID: ${f.geminiId}, Name: ${f.originalName || 'unnamed'}, Type: ${f.mime}`).join('\n')}
 
 Faceless images (${filesByType.faceless.length}):
-${filesByType.faceless.map(f => `- File ID: ${f.geminiId}, Type: ${f.mime}`).join('\n')}
+${filesByType.faceless.map(f => `- File ID: ${f.geminiId}, Name: ${f.originalName || 'unnamed'}, Type: ${f.mime}`).join('\n')}
 
 Product images (${filesByType.product.length}):
-${filesByType.product.map(f => `- File ID: ${f.geminiId}, Type: ${f.mime}`).join('\n')}
+${filesByType.product.map(f => `- File ID: ${f.geminiId}, Name: ${f.originalName || 'unnamed'}, Type: ${f.mime}`).join('\n')}
 
-Create 30 slideshows (10 per theme) where each slideshow follows this sequence:
+Create ${Math.min(filesByType.face.length, filesByType.faceless.length, filesByType.product.length) * 3} slideshows (divided evenly across the themes) where each slideshow follows this sequence:
 1. Hook/Pain: A face image that grabs attention
 2. Twist: A faceless image that amplifies the pain
 3. Dream Outcome: Another faceless image that shows relief
@@ -48,11 +61,15 @@ Return a JSON object with slideshows organized by theme, using the file IDs prov
 `;
 
     // Call Gemini with the tool schema
+    console.log('Calling Gemini with prompt:', userPrompt);
+
     const result = await invokeGeminiWithTool(
       userPrompt,
       slideshowsSchema,
       'create_slideshow_plan'
     );
+
+    console.log('Gemini response received:', JSON.stringify(result, null, 2));
 
     // Create a mapping from Gemini file IDs to local URLs
     const idToUrlMap = Object.fromEntries(

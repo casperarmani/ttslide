@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     
     // Parse request body
     const body: BatchRequest = await request.json();
-    const { systemPrompt, researchMarkdown, captionPrompt } = body;
+    const { systemPrompt, researchMarkdown, captionPrompt, files } = body;
     
     // 1. Start the process
     sendSSEEvent('status', { 
@@ -56,11 +56,14 @@ export async function POST(request: NextRequest) {
     });
     
     // 2. Call /api/order
-    sendSSEEvent('status', { 
-      message: 'Ordering slideshows with Gemini', 
-      progress: 10 
+    sendSSEEvent('status', {
+      message: 'Ordering slideshows with Gemini',
+      progress: 10
     });
-    
+
+    console.log('Batch API: Sending files to order API:',
+      (files || []).map(f => ({ kind: f.kind, id: f.geminiId })));
+
     const orderRes = await fetch(new URL('/api/order', request.url).toString(), {
       method: 'POST',
       headers: {
@@ -68,7 +71,7 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         systemPrompt,
-        files: [] // This would be populated from the frontend
+        files: files || [] // Use the files passed from the frontend
       }),
     });
     

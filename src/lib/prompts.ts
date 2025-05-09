@@ -51,8 +51,8 @@ export const slideshowsSchema = {
           },
           required: ['theme', 'images']
         },
-        minItems: 30,
-        maxItems: 30
+        minItems: 3,  // Reduced for development/testing
+        maxItems: 9   // Reduced for development/testing
       }
     },
     required: ['slideshows']

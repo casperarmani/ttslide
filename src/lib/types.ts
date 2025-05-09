@@ -53,6 +53,7 @@ export interface BatchRequest {
   systemPrompt: string;
   researchMarkdown: string;
   captionPrompt: string;
+  files: UploadedFile[];
 }
 
 // Final response from batch API
