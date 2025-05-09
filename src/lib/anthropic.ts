@@ -69,7 +69,7 @@ export async function generateCaptions(
     );
 
     const response = await claude.messages.create({
-      model: 'claude-3-sonnet-2025-05-06',
+      model: 'claude-3-7-sonnet-20250219',
       max_tokens: 400,
       messages: [{
         role: 'user',
@@ -114,7 +114,7 @@ export async function generateCaptions(
         );
 
         const retryResponse = await claude.messages.create({
-          model: 'claude-3-sonnet-2025-05-06',
+          model: 'claude-3-7-sonnet-20250219',
           max_tokens: 400,
           messages: [{
             role: 'user',
