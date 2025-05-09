@@ -51,8 +51,8 @@ export const slideshowsSchema = {
           },
           required: ['theme', 'images']
         },
-        minItems: 3,  // Reduced for development/testing
-        maxItems: 9   // Reduced for development/testing
+        minItems: 1,  // Support at least 1 slideshow
+        maxItems: 30  // Support up to 30 slideshows (3 themes x 10 per theme)
       }
     },
     required: ['slideshows']

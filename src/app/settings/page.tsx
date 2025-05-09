@@ -86,13 +86,9 @@ export default function SettingsPage() {
         return;
       }
 
-      // For testing: limit the number of slideshows to avoid timeouts
-      const testSlideshowsPerTheme = Math.min(slideshowsPerTheme, 2);
-      const testThemes = themes.slice(0, 1); // Use only the first theme for testing
-
-      console.log('Generating slideshows with test values:', {
-        testThemes,
-        testSlideshowsPerTheme,
+      console.log('Generating slideshows with user settings:', {
+        themes,
+        slideshowsPerTheme,
         framesPerSlideshow
       });
 
@@ -107,8 +103,8 @@ export default function SettingsPage() {
           captionPrompt,
           researchMarkdown: researchText,
           files: uploadedFiles,
-          themes: testThemes,
-          slideshowsPerTheme: testSlideshowsPerTheme,
+          themes: themes,
+          slideshowsPerTheme: slideshowsPerTheme,
           framesPerSlideshow
         }),
       });

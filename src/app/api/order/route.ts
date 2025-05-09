@@ -46,15 +46,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // For testing: limit the number of slideshows to avoid timeouts
-    const testSlideshowsPerTheme = Math.min(slideshowsPerTheme, 2);
-    const testThemes = themes.slice(0, 1); // Use only first theme for testing
-
-    console.log('POST /api/order: Using test values for development:', {
-      originalThemesCount: themes.length,
-      testThemesCount: testThemes.length,
-      originalSlideshowsPerTheme: slideshowsPerTheme,
-      testSlideshowsPerTheme
+    console.log('POST /api/order: Processing with user-defined values:', {
+      themesCount: themes.length,
+      slideshowsPerTheme
     });
 
     // Build user prompt
@@ -85,8 +79,8 @@ ${filesByType.faceless.map(f => `- File ID: ${f.geminiId}, Name: ${f.originalNam
 Product images (${filesByType.product.length}):
 ${filesByType.product.map(f => `- File ID: ${f.geminiId}, Name: ${f.originalName || 'unnamed'}, Type: ${f.mime}`).join('\n')}
 
-Generate ${testSlideshowsPerTheme} slideshows for each of the following themes: ${testThemes.join(', ')}.
-Total slideshows to generate: ${testThemes.length * testSlideshowsPerTheme}.
+Generate ${slideshowsPerTheme} slideshows for each of the following themes: ${themes.join(', ')}.
+Total slideshows to generate: ${themes.length * slideshowsPerTheme}.
 
 Each slideshow must have exactly ${framesPerSlideshow} images and follow this sequence:
 1. Hook/Pain: A face image that grabs attention
