@@ -18,7 +18,7 @@ async function imageToContentTypeSource(url: string) {
     }
     const buffer = await response.arrayBuffer();
     const base64Data = Buffer.from(buffer).toString('base64');
-
+    
     let mediaType = response.headers.get('content-type');
     if (!mediaType) {
       const extension = url.split('.').pop()?.toLowerCase();
@@ -82,6 +82,7 @@ Respond STRICTLY with a JSON object in the following format:
         })
       );
 
+      // Removed assistant pre-fill message as per API error when thinking is enabled
       const messages: Anthropic.Messages.MessageParam[] = [
         {
           role: 'user',
@@ -89,19 +90,18 @@ Respond STRICTLY with a JSON object in the following format:
             ...imageContents,
             { type: 'text', text: userPromptInstruction }
           ]
-        },
-        // Add an assistant pre-fill to guide the model towards JSON
-        {
-          role: 'assistant',
-          content: [{ type: 'text', text: '{"captions": [' }] // Start the JSON structure
         }
       ];
 
-      console.log(`[Claude attempt ${attempt + 1}] Generating captions. System prompt: ${systemPrompt}`); // System prompt is still passed if needed elsewhere, but userPromptInstruction is primary for Claude now.
+      console.log(`[Claude attempt ${attempt + 1}] Generating captions with extended thinking. System prompt: ${systemPrompt}`);
 
       const response = await claude.messages.create({
         model: 'claude-3-7-sonnet-20250219', // Using the original model from your codebase
-        max_tokens: 400, // Keep it reasonable for 4 short captions
+        max_tokens: 1500, // Increased to accommodate thinking budget + caption output
+        thinking: {
+          type: 'enabled',
+          budget_tokens: 1024 // Minimum required budget for internal reasoning
+        },
         system: systemPrompt, // The original system prompt for context
         messages: messages,
       });
@@ -111,25 +111,31 @@ Respond STRICTLY with a JSON object in the following format:
         throw new Error('Invalid response format from Claude API: No content found.');
       }
 
-      const textBlock = response.content.find(block => block.type === 'text');
-      if (!textBlock) {
-        console.error('[Claude] API response does not contain a text block:', response.content);
-        throw new Error('Invalid response format from Claude API: No text block found.');
+      // When using thinking parameter, we need more robust handling of content blocks
+      // Filter all text blocks from response content
+      const assistantTextBlocks = response.content.filter(
+        block => block.type === 'text' && typeof block.text === 'string'
+      );
+
+      if (assistantTextBlocks.length === 0) {
+        console.error('[Claude] API response does not contain any text blocks after enabling thinking:', response.content);
+        throw new Error('Invalid response format from Claude API: No text blocks found.');
       }
 
-      let responseText = textBlock.text;
+      // Assume the last text block is the most relevant final answer
+      let responseText = assistantTextBlocks[assistantTextBlocks.length - 1].text;
+      console.log('[Claude] Raw text from final assistant block:', responseText);
 
-      // If we used assistant pre-fill, the response might start directly after our pre-fill
-      // We need to complete the JSON structure.
-      // The pre-fill was `{"captions": [`
-      // So, if the responseText starts with ` "Caption A", ...`, we need to complete it.
-      // A more robust way is to ensure the full JSON is extracted.
-      // Let's try to find a JSON block.
-
+      // With thinking enabled and no pre-fill, we expect a complete JSON response
+      // We'll still extract JSON to be safe, in case there's any preamble
       const jsonMatch = responseText.match(/{[\s\S]*}/);
       if (jsonMatch && jsonMatch[0]) {
         responseText = jsonMatch[0];
         console.log('[Claude] Extracted JSON block:', responseText);
+      }
+      
+      try {
+        // Now attempt to parse the responseText as JSON
         const parsedResponse = JSON.parse(responseText);
         if (parsedResponse.captions && Array.isArray(parsedResponse.captions) && parsedResponse.captions.length === imageUrls.length) {
           return parsedResponse.captions;
@@ -137,29 +143,10 @@ Respond STRICTLY with a JSON object in the following format:
           console.error('[Claude] Parsed JSON does not have the expected structure:', parsedResponse);
           throw new SyntaxError("Parsed JSON missing 'captions' array or wrong length.");
         }
-      } else {
-         // If assistant pre-fill was `{"captions": [` and Claude just gives the array content plus closing.
-         // Example: ` "caption1", "caption2", "caption3", "caption4"]}`
-         // We need to prepend `{"captions": [` if it's not a full JSON object.
-        if (!responseText.trim().startsWith("{")) {
-          responseText = `{"captions": [${responseText}`; // This assumes pre-fill worked as intended
-        }
-        // Ensure it's a complete JSON structure, attempting to fix if Claude only returned the array content + end
-        if (responseText.endsWith("]")) { // If it ends with ] but not }
-            responseText += "}";
-        } else if (!responseText.endsWith("]}")) { // If it doesn't end with ]} but should
-            // This part is tricky and error-prone. Better to rely on stronger prompting.
-            // For now, we'll assume the refined prompt + prefill is better.
-        }
-
-        console.log('[Claude] Attempting to parse potentially partial JSON:', responseText);
-        const parsedResponse = JSON.parse(responseText);
-         if (parsedResponse.captions && Array.isArray(parsedResponse.captions) && parsedResponse.captions.length === imageUrls.length) {
-          return parsedResponse.captions;
-        } else {
-          console.error('[Claude] Parsed JSON does not have the expected structure (after attempting fix):', parsedResponse);
-          throw new SyntaxError("Parsed JSON missing 'captions' array or wrong length after fix attempt.");
-        }
+      } catch (jsonError) {
+        console.error('[Claude] Failed to parse JSON response:', jsonError);
+        console.log('[Claude] Raw response that failed JSON parsing:', responseText);
+        throw jsonError; // Rethrow to be caught by the outer try-catch
       }
 
     } catch (error: any) {
@@ -170,10 +157,11 @@ Respond STRICTLY with a JSON object in the following format:
       const apiErrorMessage = error?.error?.message;
       const errorStatus = error?.status;
 
-      if (errorStatus === 404 && apiErrorType === 'not_found_error') {
-         console.error(`[Claude] Model not found: ${apiErrorMessage}. Please check the model name and your API access.`);
-         // This is a non-recoverable error for this function, so break and fall to mock.
-         attempt = maxRetries + 1; // Force exit from loop
+      if ((errorStatus === 400 && apiErrorType === 'invalid_request_error' &&
+          (apiErrorMessage?.includes('thinking.enabled.budget_tokens') || apiErrorMessage?.includes('messages.1.content.0.type'))) ||
+          (errorStatus === 404 && apiErrorType === 'not_found_error')) {
+         console.error(`[Claude] Non-recoverable API parameter error or model not found: ${apiErrorMessage}. Stopping retries for this call.`);
+         attempt = maxRetries + 1; // Force exit from loop to go to mock data
          continue;
       }
 
@@ -189,7 +177,7 @@ Respond STRICTLY with a JSON object in the following format:
         } else {
           console.log(`[Claude] Rate limit hit. Retrying after ${waitTime / 1000} seconds (exponential backoff).`);
         }
-
+        
         if (attempt < maxRetries) {
           await new Promise(resolve => setTimeout(resolve, waitTime));
           delay *= 2; // Exponential backoff
@@ -200,7 +188,7 @@ Respond STRICTLY with a JSON object in the following format:
           // Fall through to generate mock captions if all retries fail
         }
       } else if (error instanceof SyntaxError) {
-        console.warn('[Claude] JSON parsing error. Content from Claude:', error.message.includes('textBlock is not defined') ? 'Likely no text block in response' : (typeof responseText !== 'undefined' ? responseText : 'responseText not defined'));
+        console.warn('[Claude] JSON parsing error. Content from Claude was:', (typeof responseText !== 'undefined' ? responseText : 'responseText variable was not defined before parsing attempt'));
         if (attempt < maxRetries) {
           // No specific retry for syntax error here as the prompt is already strong.
           // We will fall through to mock if it consistently fails.
@@ -224,10 +212,10 @@ Respond STRICTLY with a JSON object in the following format:
 // Helper function to generate mock captions for development
 function generateMockCaptions(count: number): string[] {
   const mockCaptions = [
-    "Tired of sleepless nights? (Mock)",
-    "Tossing and turning won't stop (Mock)",
-    "Wake up refreshed and renewed (Mock)",
-    "Try SleepEase, fall asleep in minutes (Mock)"
+    "Tired of sleepless nights? (Mock/Thinking)",
+    "Tossing and turning won't stop (Mock/Thinking)",
+    "Wake up refreshed and renewed (Mock/Thinking)",
+    "Try SleepEase, fall asleep in minutes (Mock/Thinking)"
   ];
   return mockCaptions.slice(0, count);
 }
