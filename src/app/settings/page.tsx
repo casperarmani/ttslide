@@ -78,47 +78,25 @@ export default function SettingsPage() {
       setError(null);
       setProgress(0);
       setProgressMessage('Starting batch processing');
-      
+
       // Check if we have uploaded files
       if (!uploadedFiles.length) {
         setError('No uploaded files found. Please upload images first.');
         setGenerating(false);
         return;
       }
-      
-      // Create EventSource for server-sent events
-      const eventSource = new EventSource('/api/batch');
-      
-      // Listen for status updates
-      eventSource.addEventListener('status', (event) => {
-        const data = JSON.parse(event.data);
-        setProgress(data.progress);
-        setProgressMessage(data.message);
+
+      // For testing: limit the number of slideshows to avoid timeouts
+      const testSlideshowsPerTheme = Math.min(slideshowsPerTheme, 2);
+      const testThemes = themes.slice(0, 1); // Use only the first theme for testing
+
+      console.log('Generating slideshows with test values:', {
+        testThemes,
+        testSlideshowsPerTheme,
+        framesPerSlideshow
       });
-      
-      // Listen for completion
-      eventSource.addEventListener('complete', (event) => {
-        const data = JSON.parse(event.data);
-        
-        // Save slideshows to localStorage
-        localStorage.setItem('slideshows', JSON.stringify(data.slideshows));
-        
-        // Close EventSource
-        eventSource.close();
-        
-        // Redirect to slides page
-        window.location.href = '/slides';
-      });
-      
-      // Listen for errors
-      eventSource.addEventListener('error', (event) => {
-        console.error('EventSource error:', event);
-        eventSource.close();
-        setError('Error generating slideshows. Please try again.');
-        setGenerating(false);
-      });
-      
-      // Call batch API
+
+      // Call batch API with POST request
       const response = await fetch('/api/batch', {
         method: 'POST',
         headers: {
@@ -128,15 +106,96 @@ export default function SettingsPage() {
           systemPrompt: orderingPrompt,
           captionPrompt,
           researchMarkdown: researchText,
-          files: uploadedFiles
+          files: uploadedFiles,
+          themes: testThemes,
+          slideshowsPerTheme: testSlideshowsPerTheme,
+          framesPerSlideshow
         }),
       });
-      
+
       if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(`Batch API failed: ${errorData}`);
+        let errorMsg = `Batch API request failed: ${response.status} ${response.statusText}`;
+        try {
+          const errorData = await response.json(); // Try to parse structured error
+          if (errorData && errorData.error) {
+            errorMsg = `Batch API error: ${errorData.error}`;
+          } else {
+            const textError = await response.text(); // Fallback to text
+            if (textError) errorMsg += ` - ${textError}`;
+          }
+        } catch (e) {
+          // If parsing fails, use the text if possible or stick to status
+          const textError = await response.text().catch(() => '');
+          if (textError) errorMsg += ` - ${textError}`;
+          console.error('Failed to parse error response from batch API', e);
+        }
+        throw new Error(errorMsg);
       }
-      
+
+      // Process the SSE stream directly from the response
+      if (!response.body) {
+        throw new Error('Response body is null. SSE stream cannot be established.');
+      }
+
+      // Process the SSE stream
+      const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+
+      // Read the stream
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) {
+          // Stream finished, but completion should be handled by a 'complete' event
+          if (progress < 100 && !error) {
+            console.warn("SSE stream ended unexpectedly");
+            setProgressMessage("Stream ended unexpectedly");
+          }
+          break;
+        }
+
+        const lines = value.split('\n\n');
+        for (const lineBlock of lines) {
+          if (!lineBlock.trim()) continue;
+
+          let eventName = 'message'; // Default if no event name is specified
+          let eventDataString = '';
+
+          const eventLines = lineBlock.split('\n');
+          for (const line of eventLines) {
+            if (line.startsWith('event: ')) {
+              eventName = line.substring('event: '.length).trim();
+            } else if (line.startsWith('data: ')) {
+              eventDataString += line.substring('data: '.length).trim();
+            }
+          }
+
+          if (eventDataString) {
+            try {
+              const data = JSON.parse(eventDataString);
+
+              if (eventName === 'status') {
+                setProgress(data.progress);
+                setProgressMessage(data.message);
+              } else if (eventName === 'complete') {
+                setProgress(100);
+                setProgressMessage('Batch processing complete. Redirecting...');
+                localStorage.setItem('slideshows', JSON.stringify(data.slideshows));
+                await reader.cancel(); // Gracefully cancel the reader
+                window.location.href = '/slides';
+                return;
+              } else if (eventName === 'error') {
+                console.error('SSE error event received:', data.message);
+                setError(`Error during slideshow generation: ${data.message}`);
+                await reader.cancel();
+                setGenerating(false);
+                return;
+              }
+            } catch (e) {
+              console.error('Error parsing SSE JSON data:', eventDataString, e);
+              setError(`Error parsing server response: ${(e as Error).message}`);
+            }
+          }
+        }
+      }
     } catch (err) {
       console.error('Generation error:', err);
       setError(`Failed to generate slideshows: ${(err as Error).message}`);

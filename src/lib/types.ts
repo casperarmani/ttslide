@@ -13,6 +13,9 @@ export interface UploadedFile {
 export interface OrderRequest {
   systemPrompt: string;
   files: UploadedFile[];
+  themes?: string[];
+  slideshowsPerTheme?: number;
+  framesPerSlideshow?: number;
 }
 
 // Ordered slideshow from Gemini
@@ -54,6 +57,9 @@ export interface BatchRequest {
   researchMarkdown: string;
   captionPrompt: string;
   files: UploadedFile[];
+  themes?: string[];
+  slideshowsPerTheme?: number;
+  framesPerSlideshow?: number;
 }
 
 // Final response from batch API

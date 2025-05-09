@@ -44,24 +44,41 @@ export async function POST(request: NextRequest) {
   try {
     // Create stream response
     const response = createSSEResponse();
-    
+
+    console.log('POST /api/batch: Request received');
+
     // Parse request body
     const body: BatchRequest = await request.json();
-    const { systemPrompt, researchMarkdown, captionPrompt, files } = body;
-    
-    // 1. Start the process
-    sendSSEEvent('status', { 
-      message: 'Starting batch processing', 
-      progress: 0 
+    const {
+      systemPrompt,
+      researchMarkdown,
+      captionPrompt,
+      files,
+      themes = ['PMS', 'Insomnia', 'Anxiety'],
+      slideshowsPerTheme = 10,
+      framesPerSlideshow = 4
+    } = body;
+
+    console.log('POST /api/batch: Request parsed', {
+      fileCount: files?.length || 0,
+      themesCount: themes.length,
+      slideshowsPerTheme,
+      framesPerSlideshow
     });
-    
+
+    // 1. Start the process
+    sendSSEEvent('status', {
+      message: 'Starting batch processing',
+      progress: 0
+    });
+
     // 2. Call /api/order
     sendSSEEvent('status', {
       message: 'Ordering slideshows with Gemini',
       progress: 10
     });
 
-    console.log('Batch API: Sending files to order API:',
+    console.log('POST /api/batch: Sending files to order API:',
       (files || []).map(f => ({ kind: f.kind, id: f.geminiId })));
 
     const orderRes = await fetch(new URL('/api/order', request.url).toString(), {
@@ -71,7 +88,10 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         systemPrompt,
-        files: files || [] // Use the files passed from the frontend
+        files: files || [],
+        themes,
+        slideshowsPerTheme,
+        framesPerSlideshow
       }),
     });
     
