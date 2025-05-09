@@ -113,20 +113,22 @@ export async function POST(request: NextRequest) {
       progress: 40 
     });
     
-    // Use p-limit to limit concurrency to 5 calls
-    const limit = pLimit(5);
-    
+    // Use p-limit to limit concurrency to 3 calls (reduced from 5)
+    // This helps prevent rate limit issues with Claude API
+    const limit = pLimit(3);
+
     const captionPromises = orderData.slideshows.map((slide, index) => {
       return limit(async () => {
         // Report progress for each caption call
-        sendSSEEvent('status', { 
-          message: `Generating captions for slideshow ${index + 1}/30`, 
-          progress: 40 + Math.floor((index / 30) * 50) 
+        sendSSEEvent('status', {
+          message: `Generating captions for slideshow ${index + 1}/${orderData.slideshows.length}`,
+          progress: 40 + Math.floor((index / orderData.slideshows.length) * 50)
         });
-        
+
         // Add a small delay between calls to avoid rate limits
+        // The actual backoff for API rate limits is now handled in generateCaptions
         if (index > 0) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, 200));
         }
         
         const captionRes = await fetch(new URL('/api/caption', request.url).toString(), {

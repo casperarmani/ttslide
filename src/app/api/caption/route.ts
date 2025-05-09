@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error in caption API:', error);
     return NextResponse.json(
-      { error: 'Failed to generate captions' },
+      { error: `Failed to generate captions: ${(error as Error).message}` },
       { status: 500 }
     );
   }
