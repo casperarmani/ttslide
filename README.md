@@ -1,36 +1,78 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TikTok Slideshow Generator
+
+A Next.js web application that turns image folders into fully-ordered TikTok slideshows in one click. This app uses AI to organize images and generate captions following a four-frame narrative structure.
+
+## Features
+
+- Upload three folders of images (face, faceless, product) 
+- AI-powered image ordering with Google Gemini
+- AI-generated captions with Claude Sonnet
+- Real-time progress tracking
+- Customizable system prompts and settings
+- Preview slideshows with Swiper carousel
+- Export JSON manifest for external video creation
+
+## Project Structure
+
+- `/src/app` - Next.js App Router pages
+- `/src/app/api` - API endpoints (upload, order, caption, batch)
+- `/src/lib` - Helper functions, types, and prompts
+- `/public/uploads` - Uploaded image storage
 
 ## Getting Started
 
-First, run the development server:
+1. Clone this repository
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Copy the environment variables example file:
+   ```bash
+   cp .env.example .env
+   ```
+4. Add your API keys to the `.env` file:
+   - `GEMINI_API_KEY` - Get from [Google AI Studio](https://makersuite.google.com/)
+   - `ANTHROPIC_API_KEY` - Get from [Anthropic Console](https://console.anthropic.com/)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+5. Run the development server:
+   ```bash
+   npm run dev
+   ```
+6. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Usage
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. **Upload Images**:
+   - Drag and drop three folders into the browser (face, faceless, product)
+   - Click "Upload & Continue"
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+2. **Configure Settings**:
+   - Customize system prompts for ordering and captions
+   - Add research text for context
+   - Adjust themes and settings if needed
+   - Click "Generate Slideshows"
 
-## Learn More
+3. **Preview Results**:
+   - Browse through slideshows by theme
+   - View the 4-frame structure with captions
+   - Download JSON manifest for external video creation
 
-To learn more about Next.js, take a look at the following resources:
+## API Endpoints
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `/api/upload` - Handles image uploads and Gemini file registration
+- `/api/order` - Uses Gemini to organize images into slideshow sequences
+- `/api/caption` - Uses Claude to generate captions for each slideshow
+- `/api/batch` - Orchestrates the entire process with SSE progress updates
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Technologies
 
-## Deploy on Vercel
+- Next.js 15 (App Router)
+- TypeScript
+- Google Gemini AI
+- Anthropic Claude AI
+- Swiper.js
+- TailwindCSS
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT

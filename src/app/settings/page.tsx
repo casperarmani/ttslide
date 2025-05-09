@@ -1,0 +1,320 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { defaultPrompts } from '@/lib/prompts';
+import Link from 'next/link';
+import { UploadedFile } from '@/lib/types';
+import { ArrowLeft, Play, Save, Settings } from 'lucide-react';
+
+export default function SettingsPage() {
+  const [orderingPrompt, setOrderingPrompt] = useState(defaultPrompts.ordering);
+  const [captionPrompt, setCaptionPrompt] = useState(defaultPrompts.captions);
+  const [researchText, setResearchText] = useState('');
+  const [themes, setThemes] = useState<string[]>(defaultPrompts.themes);
+  const [slideshowsPerTheme, setSlideshowsPerTheme] = useState(defaultPrompts.slideshowsPerTheme);
+  const [framesPerSlideshow, setFramesPerSlideshow] = useState(defaultPrompts.framesPerSlideshow);
+  
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [progressMessage, setProgressMessage] = useState('');
+
+  // Load uploaded files from localStorage
+  useEffect(() => {
+    const savedFiles = localStorage.getItem('uploadedFiles');
+    if (savedFiles) {
+      try {
+        setUploadedFiles(JSON.parse(savedFiles));
+      } catch (err) {
+        console.error('Error parsing saved files:', err);
+      }
+    }
+  }, []);
+
+  // Save settings to localStorage
+  const saveSettings = () => {
+    localStorage.setItem('settings', JSON.stringify({
+      orderingPrompt,
+      captionPrompt,
+      researchText,
+      themes,
+      slideshowsPerTheme,
+      framesPerSlideshow
+    }));
+    
+    // Show a temporary saved message
+    const savedElement = document.getElementById('saved-message');
+    if (savedElement) {
+      savedElement.classList.remove('opacity-0');
+      setTimeout(() => {
+        savedElement.classList.add('opacity-0');
+      }, 2000);
+    }
+  };
+
+  // Load settings from localStorage
+  useEffect(() => {
+    const savedSettings = localStorage.getItem('settings');
+    if (savedSettings) {
+      try {
+        const settings = JSON.parse(savedSettings);
+        setOrderingPrompt(settings.orderingPrompt || defaultPrompts.ordering);
+        setCaptionPrompt(settings.captionPrompt || defaultPrompts.captions);
+        setResearchText(settings.researchText || '');
+        setThemes(settings.themes || defaultPrompts.themes);
+        setSlideshowsPerTheme(settings.slideshowsPerTheme || defaultPrompts.slideshowsPerTheme);
+        setFramesPerSlideshow(settings.framesPerSlideshow || defaultPrompts.framesPerSlideshow);
+      } catch (err) {
+        console.error('Error parsing saved settings:', err);
+      }
+    }
+  }, []);
+
+  // Generate slideshows
+  const generateSlideshows = async () => {
+    try {
+      setGenerating(true);
+      setError(null);
+      setProgress(0);
+      setProgressMessage('Starting batch processing');
+      
+      // Check if we have uploaded files
+      if (!uploadedFiles.length) {
+        setError('No uploaded files found. Please upload images first.');
+        setGenerating(false);
+        return;
+      }
+      
+      // Create EventSource for server-sent events
+      const eventSource = new EventSource('/api/batch');
+      
+      // Listen for status updates
+      eventSource.addEventListener('status', (event) => {
+        const data = JSON.parse(event.data);
+        setProgress(data.progress);
+        setProgressMessage(data.message);
+      });
+      
+      // Listen for completion
+      eventSource.addEventListener('complete', (event) => {
+        const data = JSON.parse(event.data);
+        
+        // Save slideshows to localStorage
+        localStorage.setItem('slideshows', JSON.stringify(data.slideshows));
+        
+        // Close EventSource
+        eventSource.close();
+        
+        // Redirect to slides page
+        window.location.href = '/slides';
+      });
+      
+      // Listen for errors
+      eventSource.addEventListener('error', (event) => {
+        console.error('EventSource error:', event);
+        eventSource.close();
+        setError('Error generating slideshows. Please try again.');
+        setGenerating(false);
+      });
+      
+      // Call batch API
+      const response = await fetch('/api/batch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          systemPrompt: orderingPrompt,
+          captionPrompt,
+          researchMarkdown: researchText,
+          files: uploadedFiles
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(`Batch API failed: ${errorData}`);
+      }
+      
+    } catch (err) {
+      console.error('Generation error:', err);
+      setError(`Failed to generate slideshows: ${(err as Error).message}`);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <header className="border-b p-4 flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Settings</h1>
+        <div className="flex items-center gap-2">
+          <span id="saved-message" className="text-green-600 transition-opacity duration-300 opacity-0">
+            Settings saved!
+          </span>
+          <button
+            onClick={saveSettings}
+            className="border rounded-full p-2 hover:bg-gray-50"
+            title="Save settings"
+          >
+            <Save size={18} />
+          </button>
+        </div>
+      </header>
+      
+      <main className="flex-1 container mx-auto p-4 max-w-4xl">
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+            <Settings size={20} />
+            Configuration
+          </h2>
+          
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Ordering System Prompt (for Gemini)
+              </label>
+              <textarea
+                value={orderingPrompt}
+                onChange={(e) => setOrderingPrompt(e.target.value)}
+                className="w-full border rounded-lg p-3 min-h-[120px] font-mono text-sm"
+                placeholder="Enter the system prompt for ordering slides..."
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Caption System Prompt (for Claude)
+              </label>
+              <textarea
+                value={captionPrompt}
+                onChange={(e) => setCaptionPrompt(e.target.value)}
+                className="w-full border rounded-lg p-3 min-h-[120px] font-mono text-sm"
+                placeholder="Enter the system prompt for generating captions..."
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Research Markdown (context for captions)
+              </label>
+              <textarea
+                value={researchText}
+                onChange={(e) => setResearchText(e.target.value)}
+                className="w-full border rounded-lg p-3 min-h-[150px] font-mono text-sm"
+                placeholder="Enter research text to inform caption generation..."
+              />
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Themes
+                </label>
+                <input
+                  type="text"
+                  value={themes.join(', ')}
+                  onChange={(e) => setThemes(e.target.value.split(',').map(t => t.trim()))}
+                  className="w-full border rounded-lg p-2"
+                />
+                <p className="text-xs text-gray-500 mt-1">Comma-separated list</p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Slideshows Per Theme
+                </label>
+                <input
+                  type="number"
+                  value={slideshowsPerTheme}
+                  onChange={(e) => setSlideshowsPerTheme(Number(e.target.value))}
+                  min="1"
+                  max="30"
+                  className="w-full border rounded-lg p-2"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Frames Per Slideshow
+                </label>
+                <input
+                  type="number"
+                  value={framesPerSlideshow}
+                  onChange={(e) => setFramesPerSlideshow(Number(e.target.value))}
+                  min="2"
+                  max="10"
+                  className="w-full border rounded-lg p-2"
+                />
+              </div>
+            </div>
+          </div>
+          
+          {/* File upload status */}
+          <div className="mt-8 p-3 rounded-lg bg-gray-50 flex items-center justify-between">
+            <div>
+              <h3 className="font-medium">Uploaded Images</h3>
+              <p className="text-sm text-gray-600">
+                {uploadedFiles.length
+                  ? `${uploadedFiles.length} images ready for processing`
+                  : 'No images uploaded yet'}
+              </p>
+            </div>
+            <Link href="/" className="text-blue-500 text-sm hover:underline">
+              Upload more
+            </Link>
+          </div>
+          
+          {/* Error message */}
+          {error && (
+            <div className="mt-4 p-3 bg-red-50 text-red-700 rounded">
+              {error}
+            </div>
+          )}
+          
+          {/* Progress bar */}
+          {generating && (
+            <div className="mt-6">
+              <div className="flex justify-between text-sm mb-1">
+                <span>{progressMessage}</span>
+                <span>{progress}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div 
+                  className="bg-blue-600 h-2.5 rounded-full transition-all duration-500 ease-in-out" 
+                  style={{ width: `${progress}%` }}
+                ></div>
+              </div>
+            </div>
+          )}
+          
+          <div className="mt-8 flex justify-between">
+            <Link
+              href="/"
+              className="border px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-50"
+            >
+              <ArrowLeft size={18} />
+              Back
+            </Link>
+            
+            <button
+              onClick={generateSlideshows}
+              disabled={generating || !uploadedFiles.length}
+              className="bg-black text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {generating ? (
+                'Processing...'
+              ) : (
+                <>
+                  <Play size={18} />
+                  Generate Slideshows
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}

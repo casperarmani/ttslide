@@ -1,103 +1,191 @@
-import Image from "next/image";
+'use client';
+
+import { useState } from 'react';
+import { UploadedFile } from '@/lib/types';
+import Link from 'next/link';
+import { ArrowRight, Upload } from 'lucide-react';
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [files, setFiles] = useState<{ 
+    face: File[], 
+    faceless: File[], 
+    product: File[] 
+  }>({
+    face: [],
+    faceless: [],
+    product: []
+  });
+  
+  const [uploading, setUploading] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+  const handleFileChange = (type: 'face' | 'faceless' | 'product', event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files?.length) return;
+    
+    const fileList = Array.from(event.target.files);
+    setFiles(prev => ({
+      ...prev,
+      [type]: fileList
+    }));
+  };
+
+  const handleUpload = async () => {
+    try {
+      setUploading(true);
+      setError(null);
+      
+      // Check if we have files in each category
+      if (!files.face.length || !files.faceless.length || !files.product.length) {
+        setError('Please upload files for all three categories.');
+        setUploading(false);
+        return;
+      }
+      
+      // Create FormData
+      const formData = new FormData();
+      
+      // Append all files
+      [...files.face, ...files.faceless, ...files.product].forEach(file => {
+        formData.append('files', file);
+      });
+      
+      // Call upload API
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      setUploadedFiles(data);
+      
+      // Save uploaded files to localStorage for use on other pages
+      localStorage.setItem('uploadedFiles', JSON.stringify(data));
+      
+      // Redirect to settings page
+      window.location.href = '/settings';
+      
+    } catch (err) {
+      console.error('Upload error:', err);
+      setError(`Upload failed: ${(err as Error).message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <header className="border-b p-4">
+        <h1 className="text-2xl font-bold">TikTok Slide Generator</h1>
+      </header>
+      
+      <main className="flex-1 container mx-auto p-4 max-w-4xl">
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+          <h2 className="text-xl font-semibold mb-4">Upload Images</h2>
+          
+          <div className="grid gap-6 md:grid-cols-3">
+            <FileUploadBox 
+              label="Face Images"
+              description="People shots that grab attention"
+              accept="image/*"
+              onChange={(e) => handleFileChange('face', e)}
+              files={files.face}
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            
+            <FileUploadBox 
+              label="Faceless Images"
+              description="Non-face visuals for twist & outcome"
+              accept="image/*"
+              onChange={(e) => handleFileChange('faceless', e)}
+              files={files.faceless}
+            />
+            
+            <FileUploadBox 
+              label="Product Images"
+              description="Branded images for call-to-action"
+              accept="image/*"
+              onChange={(e) => handleFileChange('product', e)}
+              files={files.product}
+            />
+          </div>
+          
+          {error && (
+            <div className="mt-4 p-3 bg-red-50 text-red-700 rounded">
+              {error}
+            </div>
+          )}
+          
+          <div className="mt-8 flex justify-center">
+            <button
+              onClick={handleUpload}
+              disabled={uploading}
+              className="bg-black text-white px-4 py-2 rounded-full flex items-center gap-2 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {uploading ? (
+                'Uploading...'
+              ) : (
+                <>
+                  <Upload size={18} />
+                  Upload & Continue
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+        
+        <div className="text-center text-gray-500 text-sm">
+          <p>Images will be uploaded to the server for processing. Each slideshow follows a 4-frame narrative.</p>
+          <div className="mt-4 flex justify-center gap-4">
+            <Link href="/settings" className="text-blue-500 hover:underline flex items-center gap-1">
+              Skip to Settings <ArrowRight size={14} />
+            </Link>
+          </div>
         </div>
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+    </div>
+  );
+}
+
+function FileUploadBox({
+  label,
+  description,
+  accept,
+  onChange,
+  files
+}: {
+  label: string;
+  description: string;
+  accept: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  files: File[];
+}) {
+  return (
+    <div className="border rounded-lg p-4 flex flex-col items-center text-center">
+      <h3 className="font-medium mb-2">{label}</h3>
+      <p className="text-sm text-gray-500 mb-4">{description}</p>
+      
+      <label className="cursor-pointer bg-gray-50 hover:bg-gray-100 border border-dashed rounded-lg w-full p-4 flex flex-col items-center justify-center">
+        <Upload size={24} className="text-gray-400 mb-2" />
+        <span className="text-sm text-gray-700">Drag files or click to browse</span>
+        <input
+          type="file"
+          accept={accept}
+          onChange={onChange}
+          className="hidden"
+          webkitdirectory="true"
+          multiple
+        />
+      </label>
+      
+      {files.length > 0 && (
+        <div className="mt-3 text-sm text-gray-600">
+          {files.length} file{files.length !== 1 ? 's' : ''} selected
+        </div>
+      )}
     </div>
   );
 }
