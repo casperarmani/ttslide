@@ -29,24 +29,55 @@ export async function POST(request: NextRequest) {
 
     // Process each file
     const processedFiles: UploadedFile[] = [];
-    
+
+    // To ensure we have some of each type for testing
+    let faceCount = 0;
+    let facelessCount = 0;
+    let productCount = 0;
+
     for (const file of files) {
       // Determine folder type from relative path (webkitRelativePath)
       const relativePath = (file as any).webkitRelativePath || '';
       const folderName = relativePath.split('/')[0]?.toLowerCase() || '';
-      
+
       let kind: 'face' | 'faceless' | 'product';
-      
+
+      // For development purposes, we'll distribute files evenly among the three types
+      // to ensure we have at least one of each type
       if (folderName.includes('face') && !folderName.includes('faceless')) {
-        kind = 'face';
+        // First set of files as face
+        if (faceCount < files.length / 3) {
+          kind = 'face';
+          faceCount++;
+        }
+        // Second set as faceless
+        else if (facelessCount < files.length / 3) {
+          kind = 'faceless';
+          facelessCount++;
+        }
+        // Rest as product
+        else {
+          kind = 'product';
+          productCount++;
+        }
       } else if (folderName.includes('faceless')) {
         kind = 'faceless';
+        facelessCount++;
       } else if (folderName.includes('product')) {
         kind = 'product';
+        productCount++;
       } else {
-        // Default if folder can't be determined
-        kind = relativePath.includes('product') ? 'product' : 
-               relativePath.includes('faceless') ? 'faceless' : 'face';
+        // Distribute evenly if no specific folder name
+        if (faceCount <= facelessCount && faceCount <= productCount) {
+          kind = 'face';
+          faceCount++;
+        } else if (facelessCount <= productCount) {
+          kind = 'faceless';
+          facelessCount++;
+        } else {
+          kind = 'product';
+          productCount++;
+        }
       }
       
       // Get file buffer
