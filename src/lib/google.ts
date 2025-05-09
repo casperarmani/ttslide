@@ -4,7 +4,8 @@ if (!process.env.GEMINI_API_KEY) {
   throw new Error('Missing GEMINI_API_KEY environment variable');
 }
 
-export const gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Initialize the Google Generative AI client
+export const gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 // Helper to invoke Gemini with function/tool schema
 export async function invokeGeminiWithTool(

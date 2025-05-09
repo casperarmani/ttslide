@@ -10,10 +10,13 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.41.0",
+    "@google/genai": "^0.13.0",
     "@google/generative-ai": "^0.24.1",
+    "@types/mime-types": "^2.1.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.508.0",
+    "mime-types": "^3.0.1",
     "next": "15.3.2",
     "p-limit": "^6.2.0",
     "react": "^19.0.0",
