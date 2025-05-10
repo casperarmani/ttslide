@@ -1,4 +1,4 @@
-import { GoogleGenAI, Part, FileData, FunctionDeclaration, Tool } from "@google/genai";
+import { GoogleGenAI, Part, FunctionDeclaration, Tool } from "@google/genai";
 import fs from 'fs';
 import path from 'path';
 
@@ -6,7 +6,7 @@ if (!process.env.GEMINI_API_KEY) {
   throw new Error('Missing GEMINI_API_KEY environment variable');
 }
 
-// Initialize the new GoogleGenAI client
+// Initialize the GoogleGenAI client
 export const gemini = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // Helper to upload a file to the Gemini File API
@@ -34,14 +34,14 @@ export async function uploadFileToGemini(
     // The response object directly is the File object
     // It contains: name, displayName, mimeType, sizeBytes, createTime, updateTime, expirationTime, uri
     console.log(`[Google GenAI] File uploaded successfully. Name: ${response.name}, URI: ${response.uri}`);
-
-    // Log the URI format we received
+    
+    // Log the URI format we received (should be https:// for the API)
     if (!response.uri) {
       console.warn(`[Google GenAI] Uploaded file but received no URI`);
     } else {
       console.log(`[Google GenAI] Received URI format: ${response.uri.split('/')[0]}//...`);
     }
-
+    
     return {
       name: response.name,
       uri: response.uri,
@@ -62,8 +62,9 @@ export function createFilePartFromFileAPI(mimeType: string, fileUri: string): Pa
   } else if (!fileUri.startsWith('https://') && !fileUri.startsWith('gs://')) {
     console.warn(`[Google GenAI] URI format doesn't start with https:// or gs://: ${fileUri}. This may fail.`);
   }
-
-  // Create a part with fileData
+  
+  // Create a part with fileData - the Gemini API accepts both https://generativelanguage.googleapis.com
+  // and gs:// URIs for file references
   return {
     fileData: {
       mimeType,
@@ -106,6 +107,7 @@ export async function invokeGeminiWithTool(
 ) {
   console.log('[Google GenAI] invokeGeminiWithTool started. ToolName:', toolName);
 
+  // Create the model with the new SDK
   const model = gemini.getGenerativeModel({
     model: 'gemini-2.5-pro-preview-05-06', // Using the specified model that supports files
   });
