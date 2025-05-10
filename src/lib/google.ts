@@ -102,7 +102,7 @@ export async function deleteGeminiFile(fileIdentifier: string): Promise<void> {
 // Helper to invoke Gemini with function/tool schema
 export async function invokeGeminiWithTool(
   userPromptOrParts: string | Part[],
-  toolSchema: FunctionDeclaration, // Use specific type
+  toolSchema: FunctionDeclaration,
   toolName: string
 ) {
   console.log('[Google GenAI] invokeGeminiWithTool started. ToolName:', toolName);
@@ -115,8 +115,8 @@ export async function invokeGeminiWithTool(
   // Configure to force the specified function call
   const toolConfig = {
     functionCallingConfig: {
-      mode: 'ANY', // Force a function call
-      allowedFunctionNames: [toolName] // Specify which function to call
+      mode: 'ANY',
+      allowedFunctionNames: [toolName]
     }
   };
 
@@ -128,24 +128,33 @@ export async function invokeGeminiWithTool(
   console.log('[Google GenAI] Prompt parts count:', parts.length);
   console.log('[Google GenAI] Tool schema name:', toolSchema.name);
   console.log('[Google GenAI] Tool config:', JSON.stringify(toolConfig, null, 2));
-  console.log('[Google GenAI] Attempting model.generateContent with multimodal input...');
+  console.log('[Google GenAI] Attempting gemini.models.generateContent with multimodal input...');
 
   try {
+    // result directly IS the GenerateContentResponse
     const result = await gemini.models.generateContent({
-      model: 'gemini-2.5-pro-preview-05-06', // Specify the model here
+      model: 'gemini-2.5-pro-preview-05-06',
       contents: [{ role: 'user', parts: parts }],
-      tools: tools, // Corrected tools structure
-      toolConfig: toolConfig, // Use toolConfig to force the function
-      // When using function calling, responseMimeType: 'application/json' is not supported
+      tools: tools,
+      toolConfig: toolConfig,
     });
 
-    console.log('[Google GenAI] model.generateContent call completed successfully.');
+    console.log('[Google GenAI] gemini.models.generateContent call completed successfully.');
 
-    const response = result.response;
-    const candidate = response.candidates?.[0];
+    // Access candidates directly from the result object
+    const candidate = result.candidates?.[0];
 
     if (!candidate) {
       console.error('[Google GenAI] No candidates found in response.');
+      // Try to get text from result.text() for more clues
+      let responseText = "No text available in result.";
+      try {
+        responseText = result.text(); // Get text directly from the response object
+      } catch (textError) {
+        console.warn('[Google GenAI] Could not retrieve text using result.text():', textError);
+      }
+      console.error('[Google GenAI] Full response text (if any):', responseText);
+      console.error('[Google GenAI] Full result object for debugging:', JSON.stringify(result, null, 2)); // Log the whole result
       throw new Error('No candidates found in Gemini response.');
     }
 
@@ -153,15 +162,24 @@ export async function invokeGeminiWithTool(
       console.warn(`[Google GenAI] Unusual finish reason: ${candidate.finishReason}`);
       if (candidate.finishReason === 'SAFETY') {
         console.error('[Google GenAI] Content blocked due to safety ratings.');
+        if (result.promptFeedback) {
+          console.error('[Google GenAI] Prompt Feedback:', JSON.stringify(result.promptFeedback, null, 2));
+        }
         throw new Error('Gemini content generation failed due to safety policies.');
       }
     }
 
+    // Ensure candidate.content and candidate.content.parts exist
     if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
       console.error('[Google GenAI] No parts found in candidate content.');
-      // Try to log response text if available for more clues
-      const responseText = response.text();
+      let responseText = "No text available in result.";
+       try {
+        responseText = result.text();
+      } catch (textError) {
+        console.warn('[Google GenAI] Could not retrieve text using result.text():', textError);
+      }
       console.error('[Google GenAI] Full response text (if any):', responseText);
+      console.error('[Google GenAI] Full candidate object for debugging:', JSON.stringify(candidate, null, 2));
       throw new Error('No parts found in Gemini response candidate content.');
     }
 
@@ -169,17 +187,25 @@ export async function invokeGeminiWithTool(
 
     if (part.functionCall) {
       console.log('[Google GenAI] Function call found. Name:', part.functionCall.name);
+      console.log('[Google GenAI] Function call args:', JSON.stringify(part.functionCall.args, null, 2));
       return part.functionCall.args;
     } else if (part.text) {
       console.warn('[Google GenAI] Gemini returned text instead of a function call. Attempting to parse as JSON.');
-      console.log('[Google GenAI] Text received (first 100 chars):', part.text.substring(0, 100));
+      console.log('[Google GenAI] Text received (first 500 chars):', part.text.substring(0, 500)); // Log more
       try {
-        const parsedText = JSON.parse(part.text);
+        // It's possible the text isn't perfectly clean JSON and might be wrapped, e.g. in markdown code blocks
+        let jsonText = part.text;
+        const jsonMatch = jsonText.match(/```json\n([\s\S]*?)\n```/);
+        if (jsonMatch && jsonMatch[1]) {
+          jsonText = jsonMatch[1];
+          console.log('[Google GenAI] Extracted JSON from markdown block.');
+        }
+        const parsedText = JSON.parse(jsonText);
         console.log('[Google GenAI] Successfully parsed text as JSON.');
         return parsedText;
       } catch (e) {
         console.error('[Google GenAI] Failed to parse Gemini text response as JSON:', e);
-        console.error('[Google GenAI] Raw text received:', part.text);
+        console.error('[Google GenAI] Raw text received that failed parsing:', part.text);
         if (toolName === 'create_slideshow_plan') {
           console.log('[Google GenAI] Generating mock slideshow plan due to text parsing error.');
           return generateMockSlideShowResponse();
@@ -188,22 +214,27 @@ export async function invokeGeminiWithTool(
       }
     } else {
       console.error('[Google GenAI] Part does not contain functionCall or text.');
+      console.error('[Google GenAI] Full part object for debugging:', JSON.stringify(part, null, 2));
       throw new Error('Gemini response part is empty or in an unexpected format.');
     }
   } catch (error) {
-    console.error('[Google GenAI] Error during model.generateContent or response processing:', error);
-    // Log more details if it's a specific error
+    console.error('[Google GenAI] Error during gemini.models.generateContent or response processing:', error);
     if (error && typeof error === 'object' && 'message' in error) {
       console.error('[Google GenAI] Error message:', (error as Error).message);
       if ('stack' in error) console.error('[Google GenAI] Error stack:', (error as Error).stack);
+      // Check for specific API error details if present
+      if ('response' in error && (error as any).response) { // Type assertion
+        console.error('[Google GenAI] Full API error response:', JSON.stringify((error as any).response, null, 2));
+      }
+    } else {
+      console.error('[Google GenAI] Non-standard error object:', error);
     }
 
-    // Fallback to mock for development if it's the slideshow plan
     if (toolName === 'create_slideshow_plan') {
       console.warn('[Google GenAI] Error occurred, falling back to mock slideshow plan.');
       return generateMockSlideShowResponse();
     }
-    throw error; // Re-throw the error to be caught by the calling route
+    throw error;
   }
 }
 
