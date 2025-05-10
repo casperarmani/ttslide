@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { invokeGeminiWithTool, createFileDataPart } from '@/lib/google';
 import { slideshowsSchema } from '@/lib/prompts';
 import { OrderRequest } from '@/lib/types';
-import { Part } from '@google/generative-ai';
+import { Part } from '@google/genai';
 
 export async function POST(request: NextRequest) {
   console.log('POST /api/order: Request received.');
@@ -65,8 +65,8 @@ export async function POST(request: NextRequest) {
       product: filesByType.product.length
     });
 
-    // Helper functions to create text and image parts
-    const GText = (text: string): Part => ({ text });
+    // Helper functions to create text parts
+    const GText = (text: string): Part => ({ text: text });
 
     // Create the multimodal prompt parts array
     const promptParts: Part[] = [];
@@ -86,7 +86,12 @@ export async function POST(request: NextRequest) {
           promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}, Type: ${file.kind}\n`));
         } else {
           // Real mode with valid Gemini file references
-          promptParts.push(createFileDataPart(file.mime, file.geminiFileIdentifier));
+          if (file.geminiFileUri) {
+            promptParts.push(createFileDataPart(file.mime, file.geminiFileUri));
+          } else {
+            // Fallback if we don't have a URI
+            promptParts.push(GText(`[Image Reference: ${file.geminiFileIdentifier}]`));
+          }
           promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}\n`));
         }
       } catch (error) {
@@ -108,7 +113,12 @@ export async function POST(request: NextRequest) {
           promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}, Type: ${file.kind}\n`));
         } else {
           // Real mode with valid Gemini file references
-          promptParts.push(createFileDataPart(file.mime, file.geminiFileIdentifier));
+          if (file.geminiFileUri) {
+            promptParts.push(createFileDataPart(file.mime, file.geminiFileUri));
+          } else {
+            // Fallback if we don't have a URI
+            promptParts.push(GText(`[Image Reference: ${file.geminiFileIdentifier}]`));
+          }
           promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}\n`));
         }
       } catch (error) {
@@ -130,7 +140,12 @@ export async function POST(request: NextRequest) {
           promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}, Type: ${file.kind}\n`));
         } else {
           // Real mode with valid Gemini file references
-          promptParts.push(createFileDataPart(file.mime, file.geminiFileIdentifier));
+          if (file.geminiFileUri) {
+            promptParts.push(createFileDataPart(file.mime, file.geminiFileUri));
+          } else {
+            // Fallback if we don't have a URI
+            promptParts.push(GText(`[Image Reference: ${file.geminiFileIdentifier}]`));
+          }
           promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}\n`));
         }
       } catch (error) {

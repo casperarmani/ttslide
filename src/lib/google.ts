@@ -1,85 +1,74 @@
-import { GoogleGenerativeAI, FunctionDeclaration, Tool, Part, FileData } from '@google/generative-ai';
+import { GoogleGenAI, Part, FileData, FunctionDeclaration, Tool } from "@google/genai";
+import fs from 'fs';
+import path from 'path';
 
 if (!process.env.GEMINI_API_KEY) {
   throw new Error('Missing GEMINI_API_KEY environment variable');
 }
 
-// Initialize the Google Generative AI client
-export const gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+// Initialize the new GoogleGenAI client
+export const gemini = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // Helper to upload a file to the Gemini File API
 export async function uploadFileToGemini(
   filePath: string,
   mimeType: string,
   displayName?: string
-): Promise<{ name: string, uri?: string }> {
+): Promise<{ name: string, uri: string, displayName?: string, mimeType: string, sizeBytes: number }> {
   try {
-    console.log('[Google Gemini] Uploading file to Gemini File API. MIME type:', mimeType);
-    console.log('[Google Gemini Debug] Checking gemini object...');
-    console.log('[Google Gemini Debug] Type of gemini:', typeof gemini);
-    console.log('[Google Gemini Debug] Type of gemini.uploadFile:', typeof (gemini as any).uploadFile);
-    console.log('[Google Gemini Debug] Available methods on gemini:', Object.keys(gemini));
+    console.log(`[Google Gemini] Uploading file to Gemini File API: ${displayName || filePath}. MIME type: ${mimeType}`);
 
-    // Since we're encountering issues with gemini.uploadFile, let's use a workaround
-    // Generate a unique file identifier that can be used consistently
-    const fileId = `files/${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+    const response = await gemini.files.upload({
+      file: filePath, // Pass the file path directly
+      config: {
+        mimeType: mimeType,
+        displayName: displayName || path.basename(filePath) // Use path.basename if displayName not provided
+      }
+    });
 
-    console.log('[Google Gemini] Using mock file identifier for development:', fileId);
-
-    // In a production implementation, we would actually upload to Gemini here
-    // But for now, this mock approach allows development to continue
+    // The response object directly is the File object
+    // It contains: name, displayName, mimeType, sizeBytes, createTime, updateTime, expirationTime, uri
+    console.log(`[Google Gemini] File uploaded successfully. Name: ${response.name}, URI: ${response.uri}`);
     return {
-      name: fileId, // Mock file identifier like 'files/abc123'
-      // URI is omitted as it may not be needed for current implementation
+      name: response.name,
+      uri: response.uri,
+      displayName: response.displayName,
+      mimeType: response.mimeType,
+      sizeBytes: response.sizeBytes
     };
   } catch (error) {
-    console.error('[Google Gemini] Error uploading file:', error);
+    console.error(`[Google Gemini] Error uploading file "${displayName || filePath}":`, error);
     throw new Error(`Failed to upload file to Gemini: ${(error as Error).message}`);
   }
 }
 
 // Helper to create a fileData part for a prompt using a Gemini file identifier
-export function createFileDataPart(mimeType: string, fileIdentifier: string): FileData {
-  // Check if the identifier is a URI or just a name
-  if (fileIdentifier.startsWith('http')) {
-    // It's already a URI
-    return {
+export function createFileDataPart(mimeType: string, fileUri: string): Part {
+  // Create a part with fileData
+  return {
+    fileData: {
       mimeType,
-      fileUri: fileIdentifier
-    };
-  } else {
-    // It's a name (e.g., 'files/abc123'), so construct the fileData
-    return {
-      mimeType,
-      fileUri: fileIdentifier // The SDK will handle this correctly if it's a name
-    };
-  }
+      fileUri
+    }
+  };
 }
 
 // Helper to delete a file from Gemini File API
 export async function deleteGeminiFile(fileIdentifier: string): Promise<void> {
   try {
-    console.log('[Google Gemini] Deleting file from Gemini File API. Identifier:', fileIdentifier);
-    console.log('[Google Gemini Debug] Type of gemini.deleteFile:', typeof (gemini as any).deleteFile);
+    console.log(`[Google Gemini] Deleting file from Gemini File API. Identifier: ${fileIdentifier}`);
 
-    // Since we're using mock file identifiers for now, this is a no-op
-    // In a production implementation, we would delete the file from Gemini here
-    console.log('[Google Gemini] File deletion simulated for:', fileIdentifier);
+    // The fileIdentifier should be the 'name' of the file (e.g., "files/xxx")
+    const nameToDelete = fileIdentifier.startsWith('gs://')
+                       ? fileIdentifier.substring(fileIdentifier.lastIndexOf('/') + 1) // Extract name from gs:// URI
+                       : fileIdentifier;
 
-    // If gemini.deleteFile becomes available, uncomment this:
-    /*
-    // Extract name if a full URI was passed
-    const name = fileIdentifier.includes('/') ?
-      fileIdentifier.split('/').pop() :
-      fileIdentifier;
-
-    // Delete the file
-    await gemini.deleteFile(name);
-    */
+    await gemini.files.delete({ name: nameToDelete });
+    console.log(`[Google Gemini] File deleted successfully: ${nameToDelete}`);
   } catch (error) {
-    console.error('[Google Gemini] Error deleting file:', error);
-    // Don't throw for now since we're in mock mode
-    // throw new Error(`Failed to delete file from Gemini: ${(error as Error).message}`);
+    console.error(`[Google Gemini] Error deleting file "${fileIdentifier}":`, error);
+    // Log warning but don't throw to allow batch operation to continue
+    console.warn(`[Google Gemini] Non-fatal: Failed to delete file ${fileIdentifier}. It will auto-expire in 48h.`);
   }
 }
 
@@ -92,7 +81,7 @@ export async function invokeGeminiWithTool(
   console.log('[Google Gemini] invokeGeminiWithTool started. ToolName:', toolName);
 
   const model = gemini.getGenerativeModel({
-    model: 'gemini-2.5-pro-preview-05-06',
+    model: 'gemini-2.5-flash', // Using faster model that supports files
   });
 
   // Correct structure for the 'tools' parameter
