@@ -107,11 +107,6 @@ export async function invokeGeminiWithTool(
 ) {
   console.log('[Google GenAI] invokeGeminiWithTool started. ToolName:', toolName);
 
-  // Create the model with the new SDK
-  const model = gemini.getGenerativeModel({
-    model: 'gemini-2.5-pro-preview-05-06', // Using the specified model that supports files
-  });
-
   // Correct structure for the 'tools' parameter
   const tools: Tool[] = [{
     functionDeclarations: [toolSchema]
@@ -136,7 +131,8 @@ export async function invokeGeminiWithTool(
   console.log('[Google GenAI] Attempting model.generateContent with multimodal input...');
 
   try {
-    const result = await model.generateContent({
+    const result = await gemini.models.generateContent({
+      model: 'gemini-2.5-pro-preview-05-06', // Specify the model here
       contents: [{ role: 'user', parts: parts }],
       tools: tools, // Corrected tools structure
       toolConfig: toolConfig, // Use toolConfig to force the function
