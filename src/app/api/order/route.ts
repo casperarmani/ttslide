@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { invokeGeminiWithTool, createFilePartFromFileAPI } from '@/lib/google';
-import { slideshowsSchema } from '@/lib/prompts';
+import { slideshowsSchema, defaultPrompts } from '@/lib/prompts';
 import { OrderRequest } from '@/lib/types';
 import { Part } from '@google/genai';
 
@@ -73,106 +73,128 @@ export async function POST(request: NextRequest) {
 
     // Start with the system prompt
     promptParts.push(GText(systemPrompt));
-    promptParts.push(GText("\n\nI have uploaded images that I want to organize into TikTok slideshows. Here are the files:\n"));
+    promptParts.push(GText("\n\nI have uploaded images that I want to organize into TikTok slideshows. For each image below, I am providing its unique Gemini File API Identifier and its kind. You MUST use these Gemini File API Identifiers when specifying images in your JSON output.\n"));
 
-    // Add face images with visual content (or mockups in development)
-    promptParts.push(GText(`\nFace images (${filesByType.face.length}):`));
+    // Add face images
+    promptParts.push(GText(`\nFace images (${filesByType.face.length}):\n`));
     filesByType.face.forEach(file => {
       try {
-        // Check if we're in mock mode or if file references are valid
-        if (!file.geminiFileUri || (!file.geminiFileUri.startsWith('https://') && !file.geminiFileUri.startsWith('gs://'))) {
-          // Mock mode - use text references instead
-          promptParts.push(GText(`[Image Reference: ${file.geminiFileIdentifier}]`));
-          promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}, Type: ${file.kind}\n`));
+        // Add the actual image visual content when possible
+        if (file.geminiFileUri && (file.geminiFileUri.startsWith('https://') || file.geminiFileUri.startsWith('gs://'))) {
+          promptParts.push(createFilePartFromFileAPI(file.mime, file.geminiFileUri));
         } else {
-          // Real mode with valid Gemini file references
-          if (file.geminiFileUri && (file.geminiFileUri.startsWith('https://') || file.geminiFileUri.startsWith('gs://'))) {
-            promptParts.push(createFilePartFromFileAPI(file.mime, file.geminiFileUri));
-          } else {
-            // Fallback if we don't have a URI
-            promptParts.push(GText(`[Image Reference: ${file.geminiFileIdentifier}]`));
-          }
-          promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}\n`));
+          // Fallback for mock mode or missing URI
+          promptParts.push(GText(`[Image visual not available]`));
         }
+        // Always provide the Gemini File identifier prominently and explicitly
+        promptParts.push(GText(`Gemini File API Identifier: ${file.geminiFileIdentifier}, Kind: ${file.kind}\n`));
       } catch (error) {
         console.warn(`Failed to process file ${file.originalName}:`, error);
-        // Fallback to text reference
-        promptParts.push(GText(`[Image Reference: ${file.geminiFileIdentifier}]`));
-        promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}, Type: ${file.kind}\n`));
+        // Even on error, still provide the identifier reference
+        promptParts.push(GText(`[Image visual not available]`));
+        promptParts.push(GText(`Gemini File API Identifier: ${file.geminiFileIdentifier}, Kind: ${file.kind}\n`));
       }
     });
 
-    // Add faceless images with visual content (or mockups)
-    promptParts.push(GText(`\nFaceless images (${filesByType.faceless.length}):`));
+    // Add faceless images
+    promptParts.push(GText(`\nFaceless images (${filesByType.faceless.length}):\n`));
     filesByType.faceless.forEach(file => {
       try {
-        // Check if we're in mock mode or if file references are valid
-        if (!file.geminiFileUri || (!file.geminiFileUri.startsWith('https://') && !file.geminiFileUri.startsWith('gs://'))) {
-          // Mock mode - use text references instead
-          promptParts.push(GText(`[Image Reference: ${file.geminiFileIdentifier}]`));
-          promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}, Type: ${file.kind}\n`));
+        // Add the actual image visual content when possible
+        if (file.geminiFileUri && (file.geminiFileUri.startsWith('https://') || file.geminiFileUri.startsWith('gs://'))) {
+          promptParts.push(createFilePartFromFileAPI(file.mime, file.geminiFileUri));
         } else {
-          // Real mode with valid Gemini file references
-          if (file.geminiFileUri && (file.geminiFileUri.startsWith('https://') || file.geminiFileUri.startsWith('gs://'))) {
-            promptParts.push(createFilePartFromFileAPI(file.mime, file.geminiFileUri));
-          } else {
-            // Fallback if we don't have a URI
-            promptParts.push(GText(`[Image Reference: ${file.geminiFileIdentifier}]`));
-          }
-          promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}\n`));
+          // Fallback for mock mode or missing URI
+          promptParts.push(GText(`[Image visual not available]`));
         }
+        // Always provide the Gemini File identifier prominently and explicitly
+        promptParts.push(GText(`Gemini File API Identifier: ${file.geminiFileIdentifier}, Kind: ${file.kind}\n`));
       } catch (error) {
         console.warn(`Failed to process file ${file.originalName}:`, error);
-        // Fallback to text reference
-        promptParts.push(GText(`[Image Reference: ${file.geminiFileIdentifier}]`));
-        promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}, Type: ${file.kind}\n`));
+        // Even on error, still provide the identifier reference
+        promptParts.push(GText(`[Image visual not available]`));
+        promptParts.push(GText(`Gemini File API Identifier: ${file.geminiFileIdentifier}, Kind: ${file.kind}\n`));
       }
     });
 
-    // Add product images with visual content (or mockups)
-    promptParts.push(GText(`\nProduct images (${filesByType.product.length}):`));
+    // Add product images
+    promptParts.push(GText(`\nProduct images (${filesByType.product.length}):\n`));
     filesByType.product.forEach(file => {
       try {
-        // Check if we're in mock mode or if file references are valid
-        if (!file.geminiFileUri || (!file.geminiFileUri.startsWith('https://') && !file.geminiFileUri.startsWith('gs://'))) {
-          // Mock mode - use text references instead
-          promptParts.push(GText(`[Image Reference: ${file.geminiFileIdentifier}]`));
-          promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}, Type: ${file.kind}\n`));
+        // Add the actual image visual content when possible
+        if (file.geminiFileUri && (file.geminiFileUri.startsWith('https://') || file.geminiFileUri.startsWith('gs://'))) {
+          promptParts.push(createFilePartFromFileAPI(file.mime, file.geminiFileUri));
         } else {
-          // Real mode with valid Gemini file references
-          if (file.geminiFileUri && (file.geminiFileUri.startsWith('https://') || file.geminiFileUri.startsWith('gs://'))) {
-            promptParts.push(createFilePartFromFileAPI(file.mime, file.geminiFileUri));
-          } else {
-            // Fallback if we don't have a URI
-            promptParts.push(GText(`[Image Reference: ${file.geminiFileIdentifier}]`));
-          }
-          promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}\n`));
+          // Fallback for mock mode or missing URI
+          promptParts.push(GText(`[Image visual not available]`));
         }
+        // Always provide the Gemini File identifier prominently and explicitly
+        promptParts.push(GText(`Gemini File API Identifier: ${file.geminiFileIdentifier}, Kind: ${file.kind}\n`));
       } catch (error) {
         console.warn(`Failed to process file ${file.originalName}:`, error);
-        // Fallback to text reference
-        promptParts.push(GText(`[Image Reference: ${file.geminiFileIdentifier}]`));
-        promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}, Type: ${file.kind}\n`));
+        // Even on error, still provide the identifier reference
+        promptParts.push(GText(`[Image visual not available]`));
+        promptParts.push(GText(`Gemini File API Identifier: ${file.geminiFileIdentifier}, Kind: ${file.kind}\n`));
       }
     });
 
-    // Add the task instructions
+    // Add the task instructions with original ordering prompt and specific format requirements
+    const originalOrderingSystemPrompt = defaultPrompts.ordering;
+
     promptParts.push(GText(`
-Generate ${slideshowsPerTheme} slideshows for each of the following themes: ${themes.join(', ')}.
-Total slideshows to generate: ${themes.length * slideshowsPerTheme}.
+${originalOrderingSystemPrompt}
 
-Each slideshow must have exactly ${framesPerSlideshow} images and follow this sequence:
-1. Hook/Pain: A face image that grabs attention
-2. Twist: A faceless image that amplifies the pain
-3. Dream Outcome: Another faceless image that shows relief
-4. Product Call-out: A product image that finishes the story
+Your primary task, as outlined in the creative brief above, is to generate a slideshow plan.
+For this specific interaction, you MUST structure your final output EXCLUSIVELY as a single JSON object.
+It is CRITICAL that you invoke the 'create_slideshow_plan' tool to generate this JSON.
 
-Return a JSON object using the 'create_slideshow_plan' tool, containing the slideshows organized by theme, using the file identifiers provided.
-Ensure the output strictly adheres to the provided tool schema.
+The JSON object MUST strictly adhere to the following schema:
+The top-level key of this JSON object MUST be "slideshows".
+The "slideshows" key must contain an array of slideshow objects.
+Each slideshow object in the array represents a single slideshow and MUST contain:
+a. "theme": A string for the theme (e.g., one of ${JSON.stringify(themes)}).
+b. "images": An array of exactly ${framesPerSlideshow} image identifiers.
+
+---------------------------------------------------
+CRITICALLY IMPORTANT FOR IMAGE IDENTIFIERS IN THE "images" ARRAY:
+---------------------------------------------------
+
+BEFORE GENERATING YOUR RESPONSE, RE-READ THIS SECTION CAREFULLY:
+
+The image identifiers you use in the "images" array MUST be the EXACT Gemini File API Identifiers I provided above for each image.
+Each valid identifier follows this format: "files/xxxxxxxxxxxx" (for example, "files/fcdtzh17l0eq" or "files/mzt9t3vm9ue4").
+
+DO NOT use any other reference format. ONLY use the string specified after "Gemini File API Identifier:" for each image.
+
+For example, if I described an image as:
+   [Image visual]
+   Gemini File API Identifier: files/abc123def456, Kind: face
+
+Then in your JSON response, you must use EXACTLY "files/abc123def456" as the identifier in the images array.
+
+INCORRECT: "testface/image.jpg", "/uploads/image.jpg", or any other format
+CORRECT: "files/abc123def456" (the exact Gemini File API Identifier)
+
+---------------------------------------------------
+
+Review your generated plan carefully. After designing the slideshows according to the creative brief, ensure your entire response is ONLY the described JSON object, formatted correctly, and uses only the correct Gemini File API identifiers.
+
+Please generate ${slideshowsPerTheme} slideshows for each of the specified themes: ${themes.join(', ')}.
+This means a total of ${themes.length * slideshowsPerTheme} slideshows.
+Each slideshow must contain exactly ${framesPerSlideshow} images.
+The sequence of images within each slideshow, based on the image types provided (face, faceless, product), MUST be:
+Hook/Pain: A face image.
+Twist: A faceless image.
+Dream Outcome: Another faceless image.
+Product Call-out: A product image.
+
+BEFORE FINALIZING YOUR RESPONSE: Check each identifier in your "images" arrays and ensure they all exactly match the Gemini File API Identifiers provided above.
 `));
 
     // Call Gemini with the tool schema and multimodal parts
     console.log('POST /api/order: Calling Gemini with multimodal prompt (parts count: ' + promptParts.length + ')');
+    // For debugging, uncomment to log the last part of the prompt
+    // console.log('POST /api/order: Last prompt part:', JSON.stringify(promptParts.slice(-1), null, 2));
 
     let geminiResult;
     try {
@@ -181,16 +203,57 @@ Ensure the output strictly adheres to the provided tool schema.
         slideshowsSchema,
         'create_slideshow_plan'
       );
-      console.log('POST /api/order: Gemini response received successfully:',
-        JSON.stringify(geminiResult, null, 2).substring(0, 500) + "..."); // Log snippet
+      // Log the raw result for debugging
+      console.log('POST /api/order: Raw result from invokeGeminiWithTool:',
+        typeof geminiResult === 'string' ? geminiResult.substring(0, 1000) + "..." : JSON.stringify(geminiResult, null, 2).substring(0, 1000) + "...");
     } catch (geminiError) {
-      console.error('POST /api/order: Error during invokeGeminiWithTool:', geminiError);
-      throw geminiError; // Re-throw to be caught by the outer try-catch
+      console.error('POST /api/order: Error during invokeGeminiWithTool call:', geminiError);
+      return NextResponse.json(
+        { error: `Gemini API call via invokeGeminiWithTool failed: ${(geminiError as Error).message}` },
+        { status: 500 }
+      );
     }
 
-    if (!geminiResult || !geminiResult.slideshows) {
-      console.error('POST /api/order: Gemini result is invalid or missing slideshows property.', geminiResult);
-      throw new Error('Gemini response was invalid or did not contain slideshows.');
+    // Check if Gemini's response is valid
+    if (!geminiResult || typeof geminiResult !== 'object') {
+      console.error('POST /api/order: Parsed Gemini result is invalid. Actual parsed result:', JSON.stringify(geminiResult, null, 2));
+      return NextResponse.json(
+        { error: 'Gemini response was invalid or did not adhere to the expected schema.' },
+        { status: 500 }
+      );
+    }
+
+    // Handle the case where the response has a different structure with themed_slideshows
+    let slideshows = [];
+    if (geminiResult.themed_slideshows && Array.isArray(geminiResult.themed_slideshows)) {
+      console.log('POST /api/order: Found themed_slideshows structure in response.');
+      // Extract slideshows from themed_slideshows structure
+      slideshows = geminiResult.themed_slideshows.flatMap(themeGroup => {
+        if (themeGroup.slideshows && Array.isArray(themeGroup.slideshows)) {
+          return themeGroup.slideshows.map(slide => ({
+            theme: themeGroup.theme_name || themeGroup.theme,
+            images: slide.image_ids || slide.images || []
+          }));
+        }
+        return [];
+      });
+    } else if (geminiResult.slideshows && Array.isArray(geminiResult.slideshows)) {
+      // Existing structure (preferred)
+      slideshows = geminiResult.slideshows;
+    } else {
+      console.error('POST /api/order: Gemini result does not contain valid slideshows structure:', geminiResult);
+      return NextResponse.json(
+        { error: 'Gemini response was invalid or did not contain a recognizable slideshows structure.' },
+        { status: 500 }
+      );
+    }
+
+    if (slideshows.length === 0) {
+      console.error('POST /api/order: No slideshows found in Gemini response.');
+      return NextResponse.json(
+        { error: 'No slideshows found in Gemini response.' },
+        { status: 500 }
+      );
     }
 
     // Create a mapping from Gemini file identifiers to local URLs
@@ -198,14 +261,46 @@ Ensure the output strictly adheres to the provided tool schema.
       files.map(file => [file.geminiFileIdentifier, file.localUrl])
     );
 
-    // Replace Gemini file identifiers with local URLs in the response
-    const processedSlideshows = geminiResult.slideshows.map(slideshow => ({
-      theme: slideshow.theme,
-      images: slideshow.images.map(identifier => identifierToUrlMap[identifier] || identifier)
-    }));
+    // Process the slideshows with enhanced validation
+    const processedSlideshows = slideshows.map((slideshow, index) => {
+      if (!slideshow || typeof slideshow !== 'object' || !slideshow.images || !Array.isArray(slideshow.images)) {
+        console.warn(`POST /api/order: Slideshow at index ${index} is malformed or missing images array:`, slideshow);
+        return { theme: slideshow?.theme || "unknown", images: [], error: "Malformed slideshow data from Gemini" };
+      }
 
-    console.log('POST /api/order: Successfully processed slideshows. Count:', processedSlideshows.length);
-    return NextResponse.json({ slideshows: processedSlideshows });
+      const mappedImages = slideshow.images.map((identifier, imgIndex) => {
+        if (typeof identifier !== 'string') {
+          console.warn(`POST /api/order: Invalid image identifier format received at index ${imgIndex} in slideshow ${index}:`, identifier);
+          return `invalid_identifier:${JSON.stringify(identifier)}`;
+        }
+
+        const url = identifierToUrlMap[identifier];
+        if (!url) {
+          // Check if this looks like a Gemini file ID
+          if (identifier.startsWith('files/')) {
+            console.warn(`POST /api/order: Could not find local URL for Gemini identifier: "${identifier}" in slideshow ${index}.`);
+          } else {
+            console.warn(`POST /api/order: Invalid Gemini image identifier format: "${identifier}" in slideshow ${index}. Expected "files/xxxx".`);
+          }
+          return identifier; // Return the original identifier as fallback
+        }
+        return url;
+      });
+
+      return {
+        theme: slideshow.theme,
+        images: mappedImages
+      };
+    });
+
+    // Filter out slideshows with errors if needed
+    const validProcessedSlideshows = processedSlideshows.filter(s => !s.error && s.images.length === framesPerSlideshow);
+    if (validProcessedSlideshows.length !== processedSlideshows.length) {
+      console.warn(`POST /api/order: ${processedSlideshows.length - validProcessedSlideshows.length} slideshows were filtered out due to validation issues.`);
+    }
+
+    console.log(`POST /api/order: Successfully processed ${validProcessedSlideshows.length} slideshows out of ${processedSlideshows.length} received from Gemini.`);
+    return NextResponse.json({ slideshows: validProcessedSlideshows });
 
   } catch (error) {
     console.error('POST /api/order: Error in main catch block.', {
