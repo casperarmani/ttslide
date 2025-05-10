@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { invokeGeminiWithTool, createFileDataPart } from '@/lib/google';
+import { invokeGeminiWithTool, createFilePartFromFileAPI } from '@/lib/google';
 import { slideshowsSchema } from '@/lib/prompts';
 import { OrderRequest } from '@/lib/types';
 import { Part } from '@google/genai';
@@ -80,14 +80,14 @@ export async function POST(request: NextRequest) {
     filesByType.face.forEach(file => {
       try {
         // Check if we're in mock mode or if file references are valid
-        if (file.geminiFileIdentifier.includes('_')) {
+        if (!file.geminiFileUri || (!file.geminiFileUri.startsWith('https://') && !file.geminiFileUri.startsWith('gs://'))) {
           // Mock mode - use text references instead
           promptParts.push(GText(`[Image Reference: ${file.geminiFileIdentifier}]`));
           promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}, Type: ${file.kind}\n`));
         } else {
           // Real mode with valid Gemini file references
-          if (file.geminiFileUri) {
-            promptParts.push(createFileDataPart(file.mime, file.geminiFileUri));
+          if (file.geminiFileUri && (file.geminiFileUri.startsWith('https://') || file.geminiFileUri.startsWith('gs://'))) {
+            promptParts.push(createFilePartFromFileAPI(file.mime, file.geminiFileUri));
           } else {
             // Fallback if we don't have a URI
             promptParts.push(GText(`[Image Reference: ${file.geminiFileIdentifier}]`));
@@ -107,14 +107,14 @@ export async function POST(request: NextRequest) {
     filesByType.faceless.forEach(file => {
       try {
         // Check if we're in mock mode or if file references are valid
-        if (file.geminiFileIdentifier.includes('_')) {
+        if (!file.geminiFileUri || (!file.geminiFileUri.startsWith('https://') && !file.geminiFileUri.startsWith('gs://'))) {
           // Mock mode - use text references instead
           promptParts.push(GText(`[Image Reference: ${file.geminiFileIdentifier}]`));
           promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}, Type: ${file.kind}\n`));
         } else {
           // Real mode with valid Gemini file references
-          if (file.geminiFileUri) {
-            promptParts.push(createFileDataPart(file.mime, file.geminiFileUri));
+          if (file.geminiFileUri && (file.geminiFileUri.startsWith('https://') || file.geminiFileUri.startsWith('gs://'))) {
+            promptParts.push(createFilePartFromFileAPI(file.mime, file.geminiFileUri));
           } else {
             // Fallback if we don't have a URI
             promptParts.push(GText(`[Image Reference: ${file.geminiFileIdentifier}]`));
@@ -134,14 +134,14 @@ export async function POST(request: NextRequest) {
     filesByType.product.forEach(file => {
       try {
         // Check if we're in mock mode or if file references are valid
-        if (file.geminiFileIdentifier.includes('_')) {
+        if (!file.geminiFileUri || (!file.geminiFileUri.startsWith('https://') && !file.geminiFileUri.startsWith('gs://'))) {
           // Mock mode - use text references instead
           promptParts.push(GText(`[Image Reference: ${file.geminiFileIdentifier}]`));
           promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}, Type: ${file.kind}\n`));
         } else {
           // Real mode with valid Gemini file references
-          if (file.geminiFileUri) {
-            promptParts.push(createFileDataPart(file.mime, file.geminiFileUri));
+          if (file.geminiFileUri && (file.geminiFileUri.startsWith('https://') || file.geminiFileUri.startsWith('gs://'))) {
+            promptParts.push(createFilePartFromFileAPI(file.mime, file.geminiFileUri));
           } else {
             // Fallback if we don't have a URI
             promptParts.push(GText(`[Image Reference: ${file.geminiFileIdentifier}]`));
