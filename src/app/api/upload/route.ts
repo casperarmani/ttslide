@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { writeFile, mkdir } from 'fs/promises';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
-import { gemini } from '@/lib/google';
+import { gemini, uploadFileToGemini } from '@/lib/google';
 import { UploadedFile } from '@/lib/types';
 import mime from 'mime-types';
 import fs from 'fs';
@@ -98,20 +98,22 @@ export async function POST(request: NextRequest) {
       // Determine MIME type
       const mimeType = file.type || mime.lookup(ext) || 'application/octet-stream';
 
-      // Since we're using Gemini 1.x which doesn't have a proper fileUpload method,
-      // we'll use base64 encoding for image data, which is the recommended approach
-      // when working with the current version of the API
-      // Convert image buffer to base64 string
-      const base64Image = buffer.toString('base64');
+      // Upload the file to Gemini File API
+      console.log(`Uploading file to Gemini File API: ${file.name} (${mimeType})`);
+      const geminiFileResponse = await uploadFileToGemini(
+        localFilePath,
+        mimeType,
+        file.name
+      );
 
-      // Generate a unique ID for the file that includes information about the file
-      const fileId = `gemini_image_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      console.log(`File processed for Gemini. Name: ${geminiFileResponse.name}`);
 
       // Add file to processed list
       processedFiles.push({
         kind,
         localUrl,
-        geminiId: fileId,
+        geminiFileIdentifier: geminiFileResponse.name, // Store the Gemini file identifier
+        geminiFileUri: geminiFileResponse.uri, // This might be undefined in mock mode
         mime: mimeType,
         originalName: file.name
       });

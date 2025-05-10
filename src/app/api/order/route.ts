@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { invokeGeminiWithTool } from '@/lib/google';
+import { invokeGeminiWithTool, createFileDataPart } from '@/lib/google';
 import { slideshowsSchema } from '@/lib/prompts';
 import { OrderRequest } from '@/lib/types';
+import { Part } from '@google/generative-ai';
 
 export async function POST(request: NextRequest) {
   console.log('POST /api/order: Request received.');
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
       slideshowsPerTheme
     });
 
-    // Build user prompt
+    // Build user prompt parts for multimodal input
     const filesByType = {
       face: files.filter(file => file.kind === 'face'),
       faceless: files.filter(file => file.kind === 'faceless'),
@@ -64,21 +65,84 @@ export async function POST(request: NextRequest) {
       product: filesByType.product.length
     });
 
-    // Create a prompt for Gemini that explains the task and file details
-    const userPrompt = `
-${systemPrompt}
+    // Helper functions to create text and image parts
+    const GText = (text: string): Part => ({ text });
 
-I have uploaded images that I want to organize into TikTok slideshows. Here are the files:
+    // Create the multimodal prompt parts array
+    const promptParts: Part[] = [];
 
-Face images (${filesByType.face.length}):
-${filesByType.face.map(f => `- File ID: ${f.geminiId}, Name: ${f.originalName || 'unnamed'}, Type: ${f.mime}`).join('\n')}
+    // Start with the system prompt
+    promptParts.push(GText(systemPrompt));
+    promptParts.push(GText("\n\nI have uploaded images that I want to organize into TikTok slideshows. Here are the files:\n"));
 
-Faceless images (${filesByType.faceless.length}):
-${filesByType.faceless.map(f => `- File ID: ${f.geminiId}, Name: ${f.originalName || 'unnamed'}, Type: ${f.mime}`).join('\n')}
+    // Add face images with visual content (or mockups in development)
+    promptParts.push(GText(`\nFace images (${filesByType.face.length}):`));
+    filesByType.face.forEach(file => {
+      try {
+        // Check if we're in mock mode or if file references are valid
+        if (file.geminiFileIdentifier.includes('_')) {
+          // Mock mode - use text references instead
+          promptParts.push(GText(`[Image Reference: ${file.geminiFileIdentifier}]`));
+          promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}, Type: ${file.kind}\n`));
+        } else {
+          // Real mode with valid Gemini file references
+          promptParts.push(createFileDataPart(file.mime, file.geminiFileIdentifier));
+          promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}\n`));
+        }
+      } catch (error) {
+        console.warn(`Failed to process file ${file.originalName}:`, error);
+        // Fallback to text reference
+        promptParts.push(GText(`[Image Reference: ${file.geminiFileIdentifier}]`));
+        promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}, Type: ${file.kind}\n`));
+      }
+    });
 
-Product images (${filesByType.product.length}):
-${filesByType.product.map(f => `- File ID: ${f.geminiId}, Name: ${f.originalName || 'unnamed'}, Type: ${f.mime}`).join('\n')}
+    // Add faceless images with visual content (or mockups)
+    promptParts.push(GText(`\nFaceless images (${filesByType.faceless.length}):`));
+    filesByType.faceless.forEach(file => {
+      try {
+        // Check if we're in mock mode or if file references are valid
+        if (file.geminiFileIdentifier.includes('_')) {
+          // Mock mode - use text references instead
+          promptParts.push(GText(`[Image Reference: ${file.geminiFileIdentifier}]`));
+          promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}, Type: ${file.kind}\n`));
+        } else {
+          // Real mode with valid Gemini file references
+          promptParts.push(createFileDataPart(file.mime, file.geminiFileIdentifier));
+          promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}\n`));
+        }
+      } catch (error) {
+        console.warn(`Failed to process file ${file.originalName}:`, error);
+        // Fallback to text reference
+        promptParts.push(GText(`[Image Reference: ${file.geminiFileIdentifier}]`));
+        promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}, Type: ${file.kind}\n`));
+      }
+    });
 
+    // Add product images with visual content (or mockups)
+    promptParts.push(GText(`\nProduct images (${filesByType.product.length}):`));
+    filesByType.product.forEach(file => {
+      try {
+        // Check if we're in mock mode or if file references are valid
+        if (file.geminiFileIdentifier.includes('_')) {
+          // Mock mode - use text references instead
+          promptParts.push(GText(`[Image Reference: ${file.geminiFileIdentifier}]`));
+          promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}, Type: ${file.kind}\n`));
+        } else {
+          // Real mode with valid Gemini file references
+          promptParts.push(createFileDataPart(file.mime, file.geminiFileIdentifier));
+          promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}\n`));
+        }
+      } catch (error) {
+        console.warn(`Failed to process file ${file.originalName}:`, error);
+        // Fallback to text reference
+        promptParts.push(GText(`[Image Reference: ${file.geminiFileIdentifier}]`));
+        promptParts.push(GText(`Name: ${file.originalName || 'unnamed'}, Type: ${file.kind}\n`));
+      }
+    });
+
+    // Add the task instructions
+    promptParts.push(GText(`
 Generate ${slideshowsPerTheme} slideshows for each of the following themes: ${themes.join(', ')}.
 Total slideshows to generate: ${themes.length * slideshowsPerTheme}.
 
@@ -88,18 +152,17 @@ Each slideshow must have exactly ${framesPerSlideshow} images and follow this se
 3. Dream Outcome: Another faceless image that shows relief
 4. Product Call-out: A product image that finishes the story
 
-Return a JSON object using the 'create_slideshow_plan' tool, containing the slideshows organized by theme, using the file IDs provided.
+Return a JSON object using the 'create_slideshow_plan' tool, containing the slideshows organized by theme, using the file identifiers provided.
 Ensure the output strictly adheres to the provided tool schema.
-`;
+`));
 
-    // Call Gemini with the tool schema
-    console.log('POST /api/order: Calling Gemini with prompt (length: ' + userPrompt.length +
-      '). First 100 chars: ' + userPrompt.substring(0, 100));
+    // Call Gemini with the tool schema and multimodal parts
+    console.log('POST /api/order: Calling Gemini with multimodal prompt (parts count: ' + promptParts.length + ')');
 
     let geminiResult;
     try {
       geminiResult = await invokeGeminiWithTool(
-        userPrompt,
+        promptParts,
         slideshowsSchema,
         'create_slideshow_plan'
       );
@@ -115,15 +178,15 @@ Ensure the output strictly adheres to the provided tool schema.
       throw new Error('Gemini response was invalid or did not contain slideshows.');
     }
 
-    // Create a mapping from Gemini file IDs to local URLs
-    const idToUrlMap = Object.fromEntries(
-      files.map(file => [file.geminiId, file.localUrl])
+    // Create a mapping from Gemini file identifiers to local URLs
+    const identifierToUrlMap = Object.fromEntries(
+      files.map(file => [file.geminiFileIdentifier, file.localUrl])
     );
 
-    // Replace Gemini file IDs with local URLs in the response
+    // Replace Gemini file identifiers with local URLs in the response
     const processedSlideshows = geminiResult.slideshows.map(slideshow => ({
       theme: slideshow.theme,
-      images: slideshow.images.map(id => idToUrlMap[id] || id)
+      images: slideshow.images.map(identifier => identifierToUrlMap[identifier] || identifier)
     }));
 
     console.log('POST /api/order: Successfully processed slideshows. Count:', processedSlideshows.length);

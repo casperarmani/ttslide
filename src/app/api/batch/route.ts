@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import pLimit from 'p-limit';
 import { BatchRequest, OrderResponse, Slideshow } from '@/lib/types';
+import { deleteGeminiFile } from '@/lib/google';
 
 // Create stream response for Server-Sent Events
 function createSSEResponse() {
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
     });
 
     console.log('POST /api/batch: Sending files to order API:',
-      (files || []).map(f => ({ kind: f.kind, id: f.geminiId })));
+      (files || []).map(f => ({ kind: f.kind, id: f.geminiFileIdentifier })));
 
     const orderRes = await fetch(new URL('/api/order', request.url).toString(), {
       method: 'POST',
@@ -161,17 +162,47 @@ export async function POST(request: NextRequest) {
     // Wait for all caption calls to complete
     const slideshows: Slideshow[] = await Promise.all(captionPromises);
     
-    // 4. Complete the process
-    sendSSEEvent('status', { 
-      message: 'Batch processing complete', 
-      progress: 100 
+    // 4. Clean up Gemini files (optional step)
+    sendSSEEvent('status', {
+      message: 'Cleaning up temporary files',
+      progress: 95
     });
-    
+
+    // Delete files from Gemini File API
+    try {
+      // Process files in batches to avoid rate limits
+      const cleanupLimit = pLimit(5);
+      const cleanupPromises = (files || []).map(file =>
+        cleanupLimit(async () => {
+          try {
+            await deleteGeminiFile(file.geminiFileIdentifier);
+            console.log(`Successfully deleted Gemini file: ${file.geminiFileIdentifier}`);
+          } catch (cleanupError) {
+            console.warn(`Warning: Failed to delete Gemini file ${file.geminiFileIdentifier}:`, cleanupError);
+            // We don't throw here to avoid failing the entire process over cleanup
+          }
+        })
+      );
+
+      // Wait for all cleanups to complete
+      await Promise.all(cleanupPromises);
+      console.log('File cleanup complete');
+    } catch (cleanupError) {
+      console.warn('Warning: Some files may not have been cleaned up:', cleanupError);
+      // We continue despite cleanup errors
+    }
+
+    // 5. Complete the process
+    sendSSEEvent('status', {
+      message: 'Batch processing complete',
+      progress: 100
+    });
+
     // Send final data
-    sendSSEEvent('complete', { 
-      slideshows 
+    sendSSEEvent('complete', {
+      slideshows
     });
-    
+
     // Close the stream
     closeSSEStream();
     

@@ -4,7 +4,8 @@
 export interface UploadedFile {
   kind: 'face' | 'faceless' | 'product';
   localUrl: string;  // URL to access the file from the browser
-  geminiId: string;  // File ID generated for reference
+  geminiFileIdentifier: string;  // Gemini File API identifier (name)
+  geminiFileUri?: string;        // The URI returned by Gemini File API (if available)
   mime: string;      // MIME type
   originalName?: string; // Original filename
 }
