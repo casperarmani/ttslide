@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowLeft, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Download, ChevronLeft, ChevronRight, Upload } from 'lucide-react';
 import { Slideshow } from '@/lib/types';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Navigation, Pagination } from 'swiper/modules';
@@ -200,7 +200,7 @@ export default function SlidesPage() {
           </>
         )}
         
-        <div className="mt-8 flex justify-start">
+        <div className="mt-8 flex flex-col md:flex-row items-start md:items-center gap-4">
           <Link
             href="/settings"
             className="border px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-50"
@@ -208,6 +208,18 @@ export default function SlidesPage() {
             <ArrowLeft size={18} />
             Back to Settings
           </Link>
+
+          <Link
+            href="/"
+            className="border px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-50 text-blue-600"
+          >
+            <Upload size={18} />
+            Upload New Images
+          </Link>
+
+          <p className="text-sm text-amber-600">
+            Note: To generate more slideshows, you'll need to upload new images first
+          </p>
         </div>
       </main>
     </div>

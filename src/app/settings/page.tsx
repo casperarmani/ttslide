@@ -178,7 +178,14 @@ export default function SettingsPage() {
               } else if (eventName === 'complete') {
                 setProgress(100);
                 setProgressMessage('Batch processing complete. Redirecting...');
+
+                // Save slideshows result
                 localStorage.setItem('slideshows', JSON.stringify(data.slideshows));
+
+                // Clear uploadedFiles to prevent stale Gemini file references
+                // This ensures users will need to re-upload files for subsequent runs
+                localStorage.removeItem('uploadedFiles');
+
                 await reader.cancel(); // Gracefully cancel the reader
                 window.location.href = '/slides';
                 return;
@@ -330,6 +337,9 @@ export default function SettingsPage() {
                 {uploadedFiles.length
                   ? `${uploadedFiles.length} images ready for processing`
                   : 'No images uploaded yet'}
+              </p>
+              <p className="text-xs text-amber-600 mt-1">
+                Note: You'll need to re-upload images after each batch generation
               </p>
             </div>
             <Link href="/" className="text-blue-500 text-sm hover:underline">

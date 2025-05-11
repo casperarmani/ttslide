@@ -43,9 +43,13 @@ function closeSSEStream() {
 }
 
 export async function POST(request: NextRequest) {
+  let responseStreamCreated = false; // Flag to track if stream was created
+  let response;
+
   try {
     // Create stream response
-    const response = createSSEResponse();
+    response = createSSEResponse();
+    responseStreamCreated = true; // Set flag after stream is created
 
     console.log('POST /api/batch: Request received');
 
@@ -96,25 +100,25 @@ export async function POST(request: NextRequest) {
         framesPerSlideshow
       }),
     });
-    
+
     if (!orderRes.ok) {
       const error = await orderRes.text();
       throw new Error(`Order API failed: ${error}`);
     }
-    
+
     const orderData: OrderResponse = await orderRes.json();
-    
-    sendSSEEvent('status', { 
-      message: 'Successfully ordered slideshows', 
-      progress: 30 
+
+    sendSSEEvent('status', {
+      message: 'Successfully ordered slideshows',
+      progress: 30
     });
-    
+
     // 3. Parallel caption calls with rate limiting
-    sendSSEEvent('status', { 
-      message: 'Generating captions with Claude', 
-      progress: 40 
+    sendSSEEvent('status', {
+      message: 'Generating captions with Claude',
+      progress: 40
     });
-    
+
     // Use p-limit to limit concurrency to 3 calls (reduced from 5)
     // This helps prevent rate limit issues with Claude API
     const limit = pLimit(3);
@@ -132,7 +136,7 @@ export async function POST(request: NextRequest) {
         if (index > 0) {
           await new Promise(resolve => setTimeout(resolve, 200));
         }
-        
+
         const captionRes = await fetch(new URL('/api/caption', request.url).toString(), {
           method: 'POST',
           headers: {
@@ -144,14 +148,14 @@ export async function POST(request: NextRequest) {
             systemPrompt: captionPrompt
           }),
         });
-        
+
         if (!captionRes.ok) {
           const error = await captionRes.text();
           throw new Error(`Caption API failed for slideshow ${index + 1}: ${error}`);
         }
-        
+
         const captionData = await captionRes.json();
-        
+
         return {
           theme: slide.theme,
           images: slide.images,
@@ -159,10 +163,10 @@ export async function POST(request: NextRequest) {
         };
       });
     });
-    
+
     // Wait for all caption calls to complete
     const slideshows: Slideshow[] = await Promise.all(captionPromises);
-    
+
     // 4. Clean up Gemini files (optional step)
     sendSSEEvent('status', {
       message: 'Cleaning up temporary files',
@@ -204,27 +208,29 @@ export async function POST(request: NextRequest) {
       slideshows
     });
 
-    // Close the stream
-    closeSSEStream();
-    
     return response;
-    
+
   } catch (error) {
     console.error('Error in batch API:', error);
-    
-    // Send error event
-    sendSSEEvent('error', { 
-      message: `Error: ${(error as any).message || 'Unknown error'}` 
-    });
-    
-    // Close the stream
-    closeSSEStream();
-    
+
+    if (responseStreamCreated) {
+      // Send error event
+      sendSSEEvent('error', {
+        message: `Error: ${(error as any).message || 'Unknown error'}`
+      });
+    }
+
     return new Response(JSON.stringify({ error: 'Failed to process batch request' }), {
       status: 500,
       headers: {
         'Content-Type': 'application/json',
       },
     });
+  } finally {
+    // This block will execute whether the try succeeded or an error was caught
+    if (responseStreamCreated) {
+      console.log('POST /api/batch: Executing finally block to ensure SSE stream is closed.');
+      closeSSEStream();
+    }
   }
 }
