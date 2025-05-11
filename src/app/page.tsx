@@ -6,27 +6,84 @@ import Link from 'next/link';
 import { ArrowRight, Upload } from 'lucide-react';
 
 export default function Home() {
-  const [files, setFiles] = useState<{ 
-    face: File[], 
-    faceless: File[], 
-    product: File[] 
+  const [files, setFiles] = useState<{
+    face: File[],
+    faceless: File[],
+    product: File[]
   }>({
     face: [],
     faceless: [],
     product: []
   });
-  
+
   const [uploading, setUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [filteredInfo, setFilteredInfo] = useState<{
+    face: number,
+    faceless: number,
+    product: number
+  }>({
+    face: 0,
+    faceless: 0,
+    product: 0
+  });
 
   const handleFileChange = (type: 'face' | 'faceless' | 'product', event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!event.target.files?.length) return;
-    
-    const fileList = Array.from(event.target.files);
+    if (!event.target.files?.length) {
+      setFiles(prev => ({ ...prev, [type]: [] })); // Clear if no files selected
+      return;
+    }
+
+    const rawFileList = Array.from(event.target.files);
+
+    // Define accepted image MIME types
+    const acceptedImageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml', 'image/bmp'];
+
+    const filteredFileList = rawFileList.filter(file => {
+      // Check for accepted MIME types
+      const isAcceptedType = acceptedImageTypes.includes(file.type);
+      const isHiddenFile = file.name.startsWith('.');
+
+      // Fallback: Check file extension if MIME type is missing or generic
+      let isAcceptedByExtension = false;
+      if (!isAcceptedType || file.type === '' || file.type === 'application/octet-stream') {
+        const extension = file.name.split('.').pop()?.toLowerCase() || '';
+        const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'tiff', 'tif'];
+        isAcceptedByExtension = imageExtensions.includes(extension);
+      }
+
+      // Log the filtering decision
+      if (!isAcceptedType && !isAcceptedByExtension) {
+        console.warn(`Filtering out file: '${file.name}' due to unsupported format: '${file.type}'`);
+      }
+      if (isHiddenFile) {
+        console.warn(`Filtering out hidden file: '${file.name}'`);
+      }
+
+      return (isAcceptedType || isAcceptedByExtension) && !isHiddenFile;
+    });
+
+    if (rawFileList.length !== filteredFileList.length) {
+      const skippedCount = rawFileList.length - filteredFileList.length;
+      console.log(`${skippedCount} file(s) were filtered out from the selection for '${type}' category.`);
+
+      // Update filtered info state
+      setFilteredInfo(prev => ({
+        ...prev,
+        [type]: skippedCount
+      }));
+    } else {
+      // Reset filtered info for this type if no files were filtered
+      setFilteredInfo(prev => ({
+        ...prev,
+        [type]: 0
+      }));
+    }
+
     setFiles(prev => ({
       ...prev,
-      [type]: fileList
+      [type]: filteredFileList
     }));
   };
 
@@ -118,7 +175,26 @@ export default function Home() {
               {error}
             </div>
           )}
-          
+
+          {/* Display filtered files information */}
+          {Object.values(filteredInfo).some(count => count > 0) && (
+            <div className="mt-4 p-3 bg-yellow-50 text-yellow-700 rounded text-sm">
+              <p className="font-medium">Some non-image files were automatically filtered out:</p>
+              <ul className="mt-1 list-disc list-inside">
+                {filteredInfo.face > 0 && (
+                  <li>{filteredInfo.face} non-image file(s) skipped from Face Images</li>
+                )}
+                {filteredInfo.faceless > 0 && (
+                  <li>{filteredInfo.faceless} non-image file(s) skipped from Faceless Images</li>
+                )}
+                {filteredInfo.product > 0 && (
+                  <li>{filteredInfo.product} non-image file(s) skipped from Product Images</li>
+                )}
+              </ul>
+              <p className="mt-1">Only supported image formats are included.</p>
+            </div>
+          )}
+
           <div className="mt-8 flex justify-center">
             <button
               onClick={handleUpload}
