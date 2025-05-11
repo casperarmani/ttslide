@@ -29,11 +29,12 @@ export async function POST(request: NextRequest) {
       return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
     });
 
-    // Generate captions with Claude
+    // Generate captions with Claude (now passing theme from slideshow)
     const captions = await generateCaptions(
       imageUrls,
       research,
-      systemPrompt
+      systemPrompt,
+      slide.theme // Pass the theme to make captions theme-aware
     );
 
     return NextResponse.json({ captions });

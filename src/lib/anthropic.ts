@@ -47,19 +47,21 @@ export async function generateCaptions(
   imageUrls: string[],
   researchText: string,
   systemPrompt: string, // Keep the original system prompt parameter
+  theme: string, // Add theme parameter
   maxRetries = 2, // Max retries for rate limits or other transient errors
   initialDelay = 1000 // Initial delay for retries in ms
 ): Promise<string[]> {
 
-  // Refined prompt structure for better JSON adherence
-  const userPromptInstruction = `For each of the 4 images provided (Frames A-D), write one overlay caption (maximum 8 words each).
-Follow the PAS narrative structure:
-Frame A (Hook/Pain): Identify a pain point or grab attention.
-Frame B (Twist): Amplify the pain or introduce a complication.
-Frame C (Dream Outcome): Show the desired relief or positive outcome.
-Frame D (Product Call-to-Action): Connect the outcome to a product/solution.
+  // Refined prompt structure for better JSON adherence, now incorporating theme
+  const userPromptInstruction = `You are generating captions for a slideshow with the specific theme: "${theme}".
+For each of the 4 images provided (Frames A-D), write one overlay caption (maximum 8 words each) that strongly aligns with this "${theme}" theme.
+Follow the PAS narrative structure, tailoring each frame to the "${theme}" theme:
+Frame A (Hook/Pain): Identify a pain point or grab attention relevant to the "${theme}" theme.
+Frame B (Twist): Amplify the pain or introduce a complication relevant to the "${theme}" theme.
+Frame C (Dream Outcome): Show the desired relief or positive outcome relevant to the "${theme}" theme.
+Frame D (Product Call-to-Action): Connect the outcome to a product/solution, ensuring it resonates with the "${theme}" theme.
 
-Use the provided research text for insight:
+Use the provided research text for insight, focusing on aspects relevant to "${theme}":
 <research_text>
 ${researchText}
 </research_text>
@@ -199,23 +201,47 @@ Respond STRICTLY with a JSON object in the following format:
 
       if (attempt >= maxRetries) {
         console.error('[Claude] All attempts failed or error is non-recoverable. Generating mock captions.', error);
-        return generateMockCaptions(imageUrls.length);
+        return generateMockCaptions(imageUrls.length, theme);
       }
       attempt++; // For errors not handled by specific retry conditions, increment attempt and let loop decide
     }
   }
   // Should not be reached if logic is correct, but as a failsafe:
   console.warn('[Claude] Exited retry loop unexpectedly. Generating mock captions.');
-  return generateMockCaptions(imageUrls.length);
+  return generateMockCaptions(imageUrls.length, theme);
 }
 
 // Helper function to generate mock captions for development
-function generateMockCaptions(count: number): string[] {
-  const mockCaptions = [
-    "Tired of sleepless nights? (Mock/Thinking)",
-    "Tossing and turning won't stop (Mock/Thinking)",
-    "Wake up refreshed and renewed (Mock/Thinking)",
-    "Try SleepEase, fall asleep in minutes (Mock/Thinking)"
-  ];
+function generateMockCaptions(count: number, theme: string = 'Insomnia'): string[] {
+  // Create theme-aware mock captions
+  let mockCaptions: string[];
+
+  switch(theme.toLowerCase()) {
+    case 'pms':
+      mockCaptions = [
+        "Mood swings hitting you hard? (Mock/PMS)",
+        "When emotions take control unexpectedly (Mock/PMS)",
+        "Feel balanced and in control again (Mock/PMS)",
+        "Try MoodBalance, clinically proven relief (Mock/PMS)"
+      ];
+      break;
+    case 'anxiety':
+      mockCaptions = [
+        "Heart racing at random times? (Mock/Anxiety)",
+        "When worry spirals out of control (Mock/Anxiety)",
+        "Imagine peaceful thoughts replacing panic (Mock/Anxiety)",
+        "Try CalmMind, stress relief in minutes (Mock/Anxiety)"
+      ];
+      break;
+    case 'insomnia':
+    default:
+      mockCaptions = [
+        "Tired of sleepless nights? (Mock/Insomnia)",
+        "Tossing and turning won't stop (Mock/Insomnia)",
+        "Wake up refreshed and renewed (Mock/Insomnia)",
+        "Try SleepEase, fall asleep in minutes (Mock/Insomnia)"
+      ];
+  }
+
   return mockCaptions.slice(0, count);
 }

@@ -11,6 +11,7 @@ export default function SettingsPage() {
   const [captionPrompt, setCaptionPrompt] = useState(defaultPrompts.captions);
   const [researchText, setResearchText] = useState('');
   const [themes, setThemes] = useState<string[]>(defaultPrompts.themes);
+  const [themesInput, setThemesInput] = useState(defaultPrompts.themes.join(', ')); // New state for raw text input
   const [slideshowsPerTheme, setSlideshowsPerTheme] = useState(defaultPrompts.slideshowsPerTheme);
   const [framesPerSlideshow, setFramesPerSlideshow] = useState(defaultPrompts.framesPerSlideshow);
   
@@ -39,10 +40,11 @@ export default function SettingsPage() {
       captionPrompt,
       researchText,
       themes,
+      themesInput,  // Save the raw input too
       slideshowsPerTheme,
       framesPerSlideshow
     }));
-    
+
     // Show a temporary saved message
     const savedElement = document.getElementById('saved-message');
     if (savedElement) {
@@ -63,6 +65,8 @@ export default function SettingsPage() {
         setCaptionPrompt(settings.captionPrompt || defaultPrompts.captions);
         setResearchText(settings.researchText || '');
         setThemes(settings.themes || defaultPrompts.themes);
+        // Load saved themesInput if available, otherwise create from themes array
+        setThemesInput(settings.themesInput || settings.themes?.join(', ') || defaultPrompts.themes.join(', '));
         setSlideshowsPerTheme(settings.slideshowsPerTheme || defaultPrompts.slideshowsPerTheme);
         setFramesPerSlideshow(settings.framesPerSlideshow || defaultPrompts.framesPerSlideshow);
       } catch (err) {
@@ -269,8 +273,20 @@ export default function SettingsPage() {
                 </label>
                 <input
                   type="text"
-                  value={themes.join(', ')}
-                  onChange={(e) => setThemes(e.target.value.split(',').map(t => t.trim()))}
+                  value={themesInput}
+                  onChange={(e) => {
+                    // Update the raw input text
+                    setThemesInput(e.target.value);
+                    // Also update the themes array (for other parts of the app)
+                    const newThemes = e.target.value.split(',').map(t => t.trim()).filter(t => t !== '');
+                    setThemes(newThemes);
+                  }}
+                  onBlur={() => {
+                    // Clean up the input when the field loses focus
+                    const cleanedThemes = themes.filter(t => t.trim() !== '');
+                    setThemes(cleanedThemes);
+                    setThemesInput(cleanedThemes.join(', '));
+                  }}
                   className="w-full border rounded-lg p-2"
                 />
                 <p className="text-xs text-gray-500 mt-1">Comma-separated list</p>
