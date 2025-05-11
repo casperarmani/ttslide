@@ -20,9 +20,9 @@ export async function POST(request: NextRequest) {
     const {
       systemPrompt,
       files,
-      themes = ['PMS', 'Insomnia', 'Anxiety'],
-      slideshowsPerTheme = 10,
-      framesPerSlideshow = 4
+      themes = defaultPrompts.themes,
+      slideshowsPerTheme = defaultPrompts.slideshowsPerTheme,
+      framesPerSlideshow = defaultPrompts.framesPerSlideshow
     } = body;
 
     if (!files || files.length === 0) {
@@ -138,13 +138,12 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // Add the task instructions with original ordering prompt and specific format requirements
-    const originalOrderingSystemPrompt = defaultPrompts.ordering;
+    // Add the task instructions for JSON formatting and tool usage
+    // The user's systemPrompt (containing the creative brief) has already been added to promptParts
 
     promptParts.push(GText(`
-${originalOrderingSystemPrompt}
 
-Your primary task, as outlined in the creative brief above, is to generate a slideshow plan.
+Your primary task, as outlined in the creative brief provided earlier (in the system prompt), is to generate a slideshow plan.
 For this specific interaction, you MUST structure your final output EXCLUSIVELY as a single JSON object.
 It is CRITICAL that you invoke the 'create_slideshow_plan' tool to generate this JSON.
 

@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import pLimit from 'p-limit';
 import { BatchRequest, OrderResponse, Slideshow } from '@/lib/types';
 import { deleteGeminiFile } from '@/lib/google';
+import { defaultPrompts } from '@/lib/prompts';
 
 // Create stream response for Server-Sent Events
 function createSSEResponse() {
@@ -55,9 +56,9 @@ export async function POST(request: NextRequest) {
       researchMarkdown,
       captionPrompt,
       files,
-      themes = ['PMS', 'Insomnia', 'Anxiety'],
-      slideshowsPerTheme = 10,
-      framesPerSlideshow = 4
+      themes = defaultPrompts.themes,
+      slideshowsPerTheme = defaultPrompts.slideshowsPerTheme,
+      framesPerSlideshow = defaultPrompts.framesPerSlideshow
     } = body;
 
     console.log('POST /api/batch: Request parsed', {

@@ -107,8 +107,7 @@ export const slideshowsSchema = {
           properties: {
             theme: {
               type: 'string',
-              description: 'Theme of the slideshow (PMS, Insomnia, Anxiety)',
-              enum: ['PMS', 'Insomnia', 'Anxiety'],
+              description: 'Theme of the slideshow (as specified in the directive from the prompt)',
             },
             images: {
               type: 'array',
