@@ -18,9 +18,14 @@ export async function POST(request: NextRequest) {
     
     // Parse the multipart form data
     const formData = await request.formData();
-    const files = formData.getAll('files') as File[];
-    
-    if (!files || files.length === 0) {
+
+    // Get files by category from the frontend
+    const faceFiles = formData.getAll('faceFiles') as File[];
+    const facelessFiles = formData.getAll('facelessFiles') as File[];
+    const productFiles = formData.getAll('productFiles') as File[];
+
+    // Check if we have files in at least one category
+    if ((faceFiles.length + facelessFiles.length + productFiles.length) === 0) {
       return NextResponse.json(
         { error: 'No files uploaded' },
         { status: 400 }
@@ -30,94 +35,53 @@ export async function POST(request: NextRequest) {
     // Process each file
     const processedFiles: UploadedFile[] = [];
 
-    // To ensure we have some of each type for testing
-    let faceCount = 0;
-    let facelessCount = 0;
-    let productCount = 0;
+    // Process files by category with helper function
+    const processFilesByCategory = async (files: File[], kind: 'face' | 'faceless' | 'product') => {
+      for (const file of files) {
+        // Get file buffer
+        const buffer = Buffer.from(await file.arrayBuffer());
 
-    for (const file of files) {
-      // Determine folder type from relative path (webkitRelativePath)
-      const relativePath = (file as any).webkitRelativePath || '';
-      const folderName = relativePath.split('/')[0]?.toLowerCase() || '';
+        // Generate unique filename
+        const fileExt = path.extname(file.name);
+        const ext = fileExt.replace('.', '');
+        const newFileName = `${kind}_${uuidv4()}${fileExt}`;
+        const localFilePath = path.join(UPLOADS_DIR, newFileName);
 
-      let kind: 'face' | 'faceless' | 'product';
+        // Save file to uploads directory
+        await writeFile(localFilePath, buffer);
 
-      // For development purposes, we'll distribute files evenly among the three types
-      // to ensure we have at least one of each type
-      if (folderName.includes('face') && !folderName.includes('faceless')) {
-        // First set of files as face
-        if (faceCount < files.length / 3) {
-          kind = 'face';
-          faceCount++;
-        }
-        // Second set as faceless
-        else if (facelessCount < files.length / 3) {
-          kind = 'faceless';
-          facelessCount++;
-        }
-        // Rest as product
-        else {
-          kind = 'product';
-          productCount++;
-        }
-      } else if (folderName.includes('faceless')) {
-        kind = 'faceless';
-        facelessCount++;
-      } else if (folderName.includes('product')) {
-        kind = 'product';
-        productCount++;
-      } else {
-        // Distribute evenly if no specific folder name
-        if (faceCount <= facelessCount && faceCount <= productCount) {
-          kind = 'face';
-          faceCount++;
-        } else if (facelessCount <= productCount) {
-          kind = 'faceless';
-          facelessCount++;
-        } else {
-          kind = 'product';
-          productCount++;
-        }
+        // Create local URL
+        const localUrl = `/uploads/${newFileName}`;
+
+        // Determine MIME type
+        const mimeType = file.type || mime.lookup(ext) || 'application/octet-stream';
+
+        // Upload the file to Gemini File API
+        console.log(`Uploading file to Gemini File API: ${file.name} (${mimeType}) as ${kind}`);
+        const geminiFileResponse = await uploadFileToGemini(
+          localFilePath,
+          mimeType,
+          file.name
+        );
+
+        console.log(`File processed for Gemini. Name: ${geminiFileResponse.name}`);
+
+        // Add file to processed list
+        processedFiles.push({
+          kind,
+          localUrl,
+          geminiFileIdentifier: geminiFileResponse.name, // Store the Gemini file identifier
+          geminiFileUri: geminiFileResponse.uri, // This might be undefined in mock mode
+          mime: mimeType,
+          originalName: file.name
+        });
       }
-      
-      // Get file buffer
-      const buffer = Buffer.from(await file.arrayBuffer());
+    };
 
-      // Generate unique filename
-      const fileExt = path.extname(file.name);
-      const ext = fileExt.replace('.', '');
-      const newFileName = `${kind}_${uuidv4()}${fileExt}`;
-      const localFilePath = path.join(UPLOADS_DIR, newFileName);
-
-      // Save file to uploads directory
-      await writeFile(localFilePath, buffer);
-
-      // Create local URL
-      const localUrl = `/uploads/${newFileName}`;
-
-      // Determine MIME type
-      const mimeType = file.type || mime.lookup(ext) || 'application/octet-stream';
-
-      // Upload the file to Gemini File API
-      console.log(`Uploading file to Gemini File API: ${file.name} (${mimeType})`);
-      const geminiFileResponse = await uploadFileToGemini(
-        localFilePath,
-        mimeType,
-        file.name
-      );
-
-      console.log(`File processed for Gemini. Name: ${geminiFileResponse.name}`);
-
-      // Add file to processed list
-      processedFiles.push({
-        kind,
-        localUrl,
-        geminiFileIdentifier: geminiFileResponse.name, // Store the Gemini file identifier
-        geminiFileUri: geminiFileResponse.uri, // This might be undefined in mock mode
-        mime: mimeType,
-        originalName: file.name
-      });
-    }
+    // Process all files by their respective categories
+    await processFilesByCategory(faceFiles, 'face');
+    await processFilesByCategory(facelessFiles, 'faceless');
+    await processFilesByCategory(productFiles, 'product');
 
     // Return the processed files
     return NextResponse.json(processedFiles);

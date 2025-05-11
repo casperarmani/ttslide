@@ -101,11 +101,11 @@ export default function Home() {
       
       // Create FormData
       const formData = new FormData();
-      
-      // Append all files
-      [...files.face, ...files.faceless, ...files.product].forEach(file => {
-        formData.append('files', file);
-      });
+
+      // Append files with their categories
+      files.face.forEach(file => formData.append('faceFiles', file));
+      files.faceless.forEach(file => formData.append('facelessFiles', file));
+      files.product.forEach(file => formData.append('productFiles', file));
       
       // Call upload API
       const response = await fetch('/api/upload', {
