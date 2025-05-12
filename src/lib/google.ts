@@ -1,6 +1,10 @@
 import { GoogleGenAI, Part, FunctionDeclaration, Tool } from "@google/genai";
 import fs from 'fs';
+import fsp from 'fs/promises'; // Node FS Promises module for async file operations
 import path from 'path';
+import os from 'os'; // Node OS module for temp directory
+import { v4 as uuidv4 } from 'uuid'; // For unique temp filenames
+import mime from 'mime-types'; // Already imported elsewhere in the codebase
 
 if (!process.env.GEMINI_API_KEY) {
   throw new Error('Missing GEMINI_API_KEY environment variable');
@@ -61,91 +65,100 @@ export async function uploadFileToGeminiFromUrl(
   mimeType: string,
   displayName: string
 ): Promise<{ name: string, uri: string, displayName?: string, mimeType: string, sizeBytes: number }> {
-  try {
-    console.log(`[Google GenAI] Uploading from Blob URL to Gemini File API: ${displayName}. MIME type: ${mimeType}`);
 
-    // Fetch the image content from the Blob URL
+  let tempFilePath: string | null = null; // Store temp path for cleanup
+
+  // Define fileConfig early to avoid ReferenceError in catch block if fetch fails early
+  const fileConfig = { // This remains the same
+    mimeType: mimeType,
+    displayName: displayName,
+  };
+
+  try {
+    console.log(`[Google GenAI WORKAROUND] Uploading from Blob URL via Temp File: ${displayName}. MIME type: ${mimeType}`);
+
+    // 1. Fetch the image content from the Blob URL
     const response = await fetch(blobUrl);
     if (!response.ok) {
-      throw new Error(`Failed to fetch image from Blob URL: ${response.statusText}`);
+      throw new Error(`[WORKAROUND] Failed to fetch image from Blob URL: ${response.statusText} (URL: ${blobUrl})`);
     }
+    console.log('[Google GenAI WORKAROUND] Fetched blob content.');
 
-    // Convert to buffer
+    // 2. Get buffer
     const buffer = Buffer.from(await response.arrayBuffer());
-
-    // Calculate the size of the buffer
-    const sizeInBytes = buffer.length;
-    console.log(`[Google GenAI] Fetched Blob content size: ${sizeInBytes} bytes`);
-
-    // Create object with file contents for Gemini
-    // The file object must include both contents and sizeBytes
-    const fileObject = {
-      contents: buffer,
-      sizeBytes: sizeInBytes, // The sizeBytes must be in the file object, not the config
-    };
-
-    // The config object only contains metadata
-    const fileConfig = {
-      mimeType: mimeType,
-      displayName: displayName,
-    };
-
-    // --- DETAILED LOGGING BEFORE API CALL ---
-    console.log('[Google GenAI] Preparing to upload. fileObject.contents type:', Buffer.isBuffer(fileObject.contents) ? 'Buffer' : typeof fileObject.contents);
-    console.log('[Google GenAI] Preparing to upload. fileObject.sizeBytes value:', fileObject.sizeBytes);
-    console.log('[Google GenAI] Preparing to upload. fileObject.sizeBytes type:', typeof fileObject.sizeBytes); // Should log 'number'
-    console.log('[Google GenAI] Preparing to upload. fileConfig:', JSON.stringify(fileConfig));
-
-    // Check if size is valid before calling
-    if (typeof fileObject.sizeBytes !== 'number' || fileObject.sizeBytes <= 0) {
-       console.error('[Google GenAI] Invalid sizeBytes detected before upload:', fileObject.sizeBytes);
-       throw new Error(`Invalid sizeBytes calculated: ${fileObject.sizeBytes}`);
+    const sizeInBytes = buffer.length; // We'll use this for the return value if needed
+    console.log(`[Google GenAI WORKAROUND] Created buffer, size: ${sizeInBytes} bytes`);
+    if (sizeInBytes <= 0) {
+        throw new Error('[Google GenAI WORKAROUND] Fetched buffer is empty.');
     }
 
-    // Upload to Gemini File API with detailed object inspection
-    console.log('[Google GenAI] Upload payload structure:', JSON.stringify({
-      file: {
-        contentType: 'Buffer',
-        sizeBytes: fileObject.sizeBytes
-      },
-      config: fileConfig
-    }, null, 2));
+    // 3. Write buffer to a temporary file
+    const tempDir = os.tmpdir(); // Get OS temporary directory
+    const uniqueSuffix = uuidv4();
+    // Attempt to get a reasonable extension for the temp file
+    let fileExtension = path.extname(displayName);
+    if (!fileExtension) { // If original name had no extension
+        const mimeExtension = mime.extension(mimeType); // Get extension from MIME type
+        fileExtension = mimeExtension ? `.${mimeExtension}` : '.tmp';
+    }
+    tempFilePath = path.join(tempDir, `gemini-upload-${uniqueSuffix}${fileExtension}`);
 
-    const geminiFileResponse = await gemini.files.upload({
-      file: fileObject,
-      config: fileConfig
-    });
+    console.log(`[Google GenAI WORKAROUND] Writing buffer to temp file: ${tempFilePath}`);
+    await fsp.writeFile(tempFilePath, buffer); // Using fs/promises for async write
+    console.log(`[Google GenAI WORKAROUND] Successfully wrote temp file.`);
 
-    console.log(`[Google GenAI] File uploaded successfully. Name: ${geminiFileResponse.name}, URI: ${geminiFileResponse.uri || 'no URI'}`);
+    // 4. Upload using the temporary file path (this calls your existing uploadFileToGemini)
+    //    The uploadFileToGemini function will handle console logging for the actual upload.
+    console.log(`[Google GenAI WORKAROUND] Calling original uploadFileToGemini with path: ${tempFilePath}`);
+    const geminiFileResponse = await uploadFileToGemini(
+      tempFilePath,
+      fileConfig.mimeType, // Pass mimeType from fileConfig
+      fileConfig.displayName // Pass displayName from fileConfig
+    );
+    // uploadFileToGemini already logs success, so we don't need another one here.
 
+    // 5. Return result (using data from geminiFileResponse from uploadFileToGemini)
     return {
-      name: geminiFileResponse.name || '',
-      uri: geminiFileResponse.uri || '',
+      name: geminiFileResponse.name,
+      uri: geminiFileResponse.uri,
       displayName: geminiFileResponse.displayName,
-      mimeType: geminiFileResponse.mimeType || '',
-      sizeBytes: typeof geminiFileResponse.sizeBytes === 'number' ? geminiFileResponse.sizeBytes : 0
+      mimeType: geminiFileResponse.mimeType,
+      sizeBytes: geminiFileResponse.sizeBytes
     };
+
   } catch (error) {
-    console.error(`[Google GenAI] Error uploading from Blob URL "${blobUrl}":`, error);
-    console.error('[Google GenAI] Error details:', error);
-
-    // Log the error structure for more details
+    console.error(`[Google GenAI WORKAROUND] Error during upload for "${displayName}" from Blob URL "${blobUrl}":`, error);
+    // Log error details
     if (error && typeof error === 'object') {
-      if ('name' in error) console.error('[Google GenAI] Error name:', (error as any).name);
-      if ('message' in error) console.error('[Google GenAI] Error message:', (error as any).message);
-      if ('stack' in error) console.error('[Google GenAI] Error stack:', (error as any).stack);
+      if ('name' in error) console.error('[Google GenAI WORKAROUND] Error name:', (error as any).name);
+      if ('message' in error) console.error('[Google GenAI WORKAROUND] Error message:', (error as any).message);
       if ('response' in error && (error as any).response) {
-        console.error('[Google GenAI] Error response:', JSON.stringify((error as any).response, null, 2));
+        console.error('[Google GenAI WORKAROUND] Error response:', JSON.stringify((error as any).response, null, 2));
       }
-      if ('code' in error) console.error('[Google GenAI] Error code:', (error as any).code);
+      if ('code' in error) console.error('[Google GenAI WORKAROUND] Error code:', (error as any).code);
     } else {
-      console.error('[Google GenAI] Non-object error:', error);
+      console.error('[Google GenAI WORKAROUND] Non-object error:', error);
     }
+    // Log fileConfig on error
+    console.error('[Google GenAI WORKAROUND] fileConfig on error:', fileConfig);
 
-    // Log the fileConfig again in case of error (buffer might be too large to log)
-    console.error('[Google GenAI] fileConfig on error:', fileConfig);
+    throw new Error(`[WORKAROUND] Failed to upload from Blob URL to Gemini: ${(error as Error).message}`);
 
-    throw new Error(`Failed to upload from Blob URL to Gemini: ${(error as Error).message}`);
+  } finally {
+    // 6. Clean up the temporary file if it was created
+    if (tempFilePath) {
+      try {
+        console.log(`[Google GenAI WORKAROUND] Cleaning up temp file: ${tempFilePath}`);
+        if (fs.existsSync(tempFilePath)) { // Check if file exists before unlinking
+            await fsp.unlink(tempFilePath); // Using fs/promises for async unlink
+            console.log(`[Google GenAI WORKAROUND] Successfully deleted temp file.`);
+        } else {
+            console.log(`[Google GenAI WORKAROUND] Temp file ${tempFilePath} already deleted or was not created.`);
+        }
+      } catch (cleanupError) {
+        console.warn(`[Google GenAI WORKAROUND] Failed to delete temp file ${tempFilePath}:`, cleanupError);
+      }
+    }
   }
 }
 
