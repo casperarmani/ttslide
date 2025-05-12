@@ -44,13 +44,13 @@ export default function HistoryPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="border-b p-4 flex justify-between items-center">
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <History size={24} />
+        <h1 className="text-xl md:text-2xl font-bold flex items-center gap-1 md:gap-2">
+          <History size={20} className="md:w-6 md:h-6" />
           Slideshow History
         </h1>
       </header>
       
-      <main className="flex-1 container mx-auto p-4 max-w-4xl">
+      <main className="flex-1 container mx-auto px-3 py-4 sm:p-4 max-w-4xl">
         {loading ? (
           <div className="text-center py-12">
             <p className="text-lg text-gray-600">Loading slideshow history...</p>
@@ -75,26 +75,26 @@ export default function HistoryPage() {
             <h2 className="text-xl font-semibold mb-4">Your Slideshow Generations</h2>
             <div className="divide-y">
               {generations.map(generation => (
-                <Link 
-                  key={generation.id} 
+                <Link
+                  key={generation.id}
                   href={`/history/${generation.id}`}
-                  className="py-4 px-2 flex items-center justify-between hover:bg-gray-50 rounded transition-colors"
+                  className="py-4 px-2 flex flex-col sm:flex-row sm:items-center sm:justify-between hover:bg-gray-50 rounded transition-colors"
                 >
                   <div>
-                    <div className="font-medium">
-                      {generation.themes && Array.isArray(generation.themes) 
-                        ? generation.themes.join(', ') 
+                    <div className="font-medium break-words">
+                      {generation.themes && Array.isArray(generation.themes)
+                        ? generation.themes.join(', ')
                         : 'Untitled Generation'}
                     </div>
                     <div className="text-sm text-gray-500">
                       {formatDate(generation.created_at.toString())}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 mt-2 sm:mt-0">
                     <span className="text-sm text-gray-500">
                       {generation.slideshow_count} slideshows
                     </span>
-                    <ChevronRight size={16} className="text-gray-400" />
+                    <ChevronRight size={16} className="text-gray-400 flex-shrink-0" />
                   </div>
                 </Link>
               ))}
