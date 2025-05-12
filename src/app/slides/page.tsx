@@ -218,7 +218,7 @@ export default function SlidesPage() {
           </Link>
 
           <p className="text-sm text-amber-600">
-            Note: To generate more slideshows, you'll need to upload new images first
+            Note: To generate more slideshows, you&apos;ll need to upload new images first
           </p>
         </div>
       </main>

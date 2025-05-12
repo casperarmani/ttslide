@@ -116,8 +116,8 @@ Respond STRICTLY with a JSON object in the following format:
       // When using thinking parameter, we need more robust handling of content blocks
       // Filter all text blocks from response content
       const assistantTextBlocks = response.content.filter(
-        block => block.type === 'text' && typeof block.text === 'string'
-      );
+        block => block.type === 'text' && typeof (block as any).text === 'string'
+      ) as { type: 'text', text: string }[];
 
       if (assistantTextBlocks.length === 0) {
         console.error('[Claude] API response does not contain any text blocks after enabling thinking:', response.content);
@@ -190,7 +190,8 @@ Respond STRICTLY with a JSON object in the following format:
           // Fall through to generate mock captions if all retries fail
         }
       } else if (error instanceof SyntaxError) {
-        console.warn('[Claude] JSON parsing error. Content from Claude was:', (typeof responseText !== 'undefined' ? responseText : 'responseText variable was not defined before parsing attempt'));
+        // For syntax errors, responseText might not be defined in this scope
+        console.warn('[Claude] JSON parsing error. Unable to parse Claude response');
         if (attempt < maxRetries) {
           // No specific retry for syntax error here as the prompt is already strong.
           // We will fall through to mock if it consistently fails.

@@ -339,7 +339,7 @@ export default function SettingsPage() {
                   : 'No images uploaded yet'}
               </p>
               <p className="text-xs text-amber-600 mt-1">
-                Note: You'll need to re-upload images after each batch generation
+                Note: You&apos;ll need to re-upload images after each batch generation
               </p>
             </div>
             <Link href="/" className="text-blue-500 text-sm hover:underline">

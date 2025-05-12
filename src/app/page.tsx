@@ -252,6 +252,7 @@ function FileUploadBox({
           accept={accept}
           onChange={onChange}
           className="hidden"
+          // @ts-ignore webkitdirectory is a non-standard attribute
           webkitdirectory="true"
           multiple
         />

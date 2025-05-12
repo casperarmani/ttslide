@@ -223,13 +223,13 @@ BEFORE FINALIZING YOUR RESPONSE: Check each identifier in your "images" arrays a
     }
 
     // Handle the case where the response has a different structure with themed_slideshows
-    let slideshows = [];
+    let slideshows: any[] = [];
     if (geminiResult.themed_slideshows && Array.isArray(geminiResult.themed_slideshows)) {
       console.log('POST /api/order: Found themed_slideshows structure in response.');
       // Extract slideshows from themed_slideshows structure
-      slideshows = geminiResult.themed_slideshows.flatMap(themeGroup => {
+      slideshows = geminiResult.themed_slideshows.flatMap((themeGroup: any) => {
         if (themeGroup.slideshows && Array.isArray(themeGroup.slideshows)) {
-          return themeGroup.slideshows.map(slide => ({
+          return themeGroup.slideshows.map((slide: any) => ({
             theme: themeGroup.theme_name || themeGroup.theme,
             images: slide.image_ids || slide.images || []
           }));
@@ -267,7 +267,7 @@ BEFORE FINALIZING YOUR RESPONSE: Check each identifier in your "images" arrays a
         return { theme: slideshow?.theme || "unknown", images: [], error: "Malformed slideshow data from Gemini" };
       }
 
-      const mappedImages = slideshow.images.map((identifier, imgIndex) => {
+      const mappedImages = slideshow.images.map((identifier: any, imgIndex: number) => {
         if (typeof identifier !== 'string') {
           console.warn(`POST /api/order: Invalid image identifier format received at index ${imgIndex} in slideshow ${index}:`, identifier);
           return `invalid_identifier:${JSON.stringify(identifier)}`;
