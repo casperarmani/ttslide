@@ -1,13 +1,19 @@
 import { createPool } from '@vercel/postgres';
 import { Slideshow } from './types';
 
-// Create a SQL client with the specific environment variable
-const sql = createPool({
-  connectionString: process.env.DATABASE_URL
+// Check if DATABASE_URL is set, and if not, log an error
+if (!process.env.DATABASE_URL) {
+  console.error("FATAL ERROR: DATABASE_URL environment variable is not set.");
+  // Optionally, throw an error to prevent the application from starting without it
+  // throw new Error("FATAL ERROR: DATABASE_URL environment variable is not set.");
+}
+
+const pool = createPool({
+  connectionString: process.env.DATABASE_URL,
 });
 
-// Export the sql client for use in API routes
-export { sql };
+// Export the pool if direct client access is ever needed
+export { pool };
 
 // Types for the database models
 export interface SlideshowGeneration {
@@ -35,7 +41,8 @@ export interface SlideshowGenerationSummary {
 // Helper functions for common database operations
 export async function getGenerationById(id: string): Promise<SlideshowGeneration | null> {
   try {
-    const { rows, rowCount } = await sql<SlideshowGeneration>`
+    if (!pool) throw new Error("Database pool is not initialized.");
+    const { rows, rowCount } = await pool.sql<SlideshowGeneration>`
       SELECT id, created_at, settings, slideshows
       FROM slideshow_generations
       WHERE id = ${id};
@@ -44,7 +51,6 @@ export async function getGenerationById(id: string): Promise<SlideshowGeneration
     if (rowCount === 0) {
       return null;
     }
-
     return rows[0];
   } catch (error) {
     console.error(`Failed to fetch generation ${id}:`, error);
@@ -54,7 +60,8 @@ export async function getGenerationById(id: string): Promise<SlideshowGeneration
 
 export async function listGenerations(): Promise<SlideshowGenerationSummary[]> {
   try {
-    const { rows } = await sql<SlideshowGenerationSummary>`
+    if (!pool) throw new Error("Database pool is not initialized.");
+    const { rows } = await pool.sql<SlideshowGenerationSummary>`
       SELECT 
         id, 
         created_at, 
@@ -76,12 +83,18 @@ export async function saveGeneration(
   slideshows: Slideshow[]
 ): Promise<string> {
   try {
-    const result = await sql`
+    if (!pool) throw new Error("Database pool is not initialized.");
+    const result = await pool.sql`
       INSERT INTO slideshow_generations (settings, slideshows)
       VALUES (${JSON.stringify(settings)}::jsonb, ${JSON.stringify(slideshows)}::jsonb)
       RETURNING id;
     `;
-    return result.rows[0].id;
+    // Ensure result.rows[0] and result.rows[0].id exist before accessing
+    if (result.rows && result.rows.length > 0 && result.rows[0].id) {
+        return result.rows[0].id;
+    } else {
+        throw new Error("Failed to save generation or retrieve ID.");
+    }
   } catch (error) {
     console.error("Failed to save generation:", error);
     throw error;
