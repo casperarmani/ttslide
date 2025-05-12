@@ -17,17 +17,19 @@ export async function POST(request: Request): Promise<NextResponse> {
 
         return {
           allowedContentTypes: [
-            'image/jpeg', 
-            'image/png', 
-            'image/gif', 
-            'image/webp', 
-            'image/svg+xml', 
+            'image/jpeg',
+            'image/png',
+            'image/gif',
+            'image/webp',
+            'image/svg+xml',
             'image/bmp'
           ],
           tokenPayload: JSON.stringify({
             // Add any metadata you want to pass to onUploadCompleted
             pathname
           }),
+          addRandomSuffix: true, // Add random suffix on the server side
+          cacheControlMaxAge: 31536000, // Cache for 1 year (in seconds)
         };
       },
       onUploadCompleted: async ({ blob, tokenPayload }) => {

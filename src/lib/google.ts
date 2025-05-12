@@ -73,18 +73,47 @@ export async function uploadFileToGeminiFromUrl(
     // Convert to buffer
     const buffer = Buffer.from(await response.arrayBuffer());
 
+    // Calculate the size of the buffer
+    const sizeInBytes = buffer.length;
+    console.log(`[Google GenAI] Fetched Blob content size: ${sizeInBytes} bytes`);
+
     // Create object with file contents for Gemini
+    // The file object must include both contents and sizeBytes
     const fileObject = {
       contents: buffer,
+      sizeBytes: sizeInBytes, // The sizeBytes must be in the file object, not the config
     };
 
-    // Upload to Gemini File API
+    // The config object only contains metadata
+    const fileConfig = {
+      mimeType: mimeType,
+      displayName: displayName,
+    };
+
+    // --- DETAILED LOGGING BEFORE API CALL ---
+    console.log('[Google GenAI] Preparing to upload. fileObject.contents type:', Buffer.isBuffer(fileObject.contents) ? 'Buffer' : typeof fileObject.contents);
+    console.log('[Google GenAI] Preparing to upload. fileObject.sizeBytes value:', fileObject.sizeBytes);
+    console.log('[Google GenAI] Preparing to upload. fileObject.sizeBytes type:', typeof fileObject.sizeBytes); // Should log 'number'
+    console.log('[Google GenAI] Preparing to upload. fileConfig:', JSON.stringify(fileConfig));
+
+    // Check if size is valid before calling
+    if (typeof fileObject.sizeBytes !== 'number' || fileObject.sizeBytes <= 0) {
+       console.error('[Google GenAI] Invalid sizeBytes detected before upload:', fileObject.sizeBytes);
+       throw new Error(`Invalid sizeBytes calculated: ${fileObject.sizeBytes}`);
+    }
+
+    // Upload to Gemini File API with detailed object inspection
+    console.log('[Google GenAI] Upload payload structure:', JSON.stringify({
+      file: {
+        contentType: 'Buffer',
+        sizeBytes: fileObject.sizeBytes
+      },
+      config: fileConfig
+    }, null, 2));
+
     const geminiFileResponse = await gemini.files.upload({
       file: fileObject,
-      config: {
-        mimeType: mimeType,
-        displayName: displayName
-      }
+      config: fileConfig
     });
 
     console.log(`[Google GenAI] File uploaded successfully. Name: ${geminiFileResponse.name}, URI: ${geminiFileResponse.uri || 'no URI'}`);
@@ -98,6 +127,24 @@ export async function uploadFileToGeminiFromUrl(
     };
   } catch (error) {
     console.error(`[Google GenAI] Error uploading from Blob URL "${blobUrl}":`, error);
+    console.error('[Google GenAI] Error details:', error);
+
+    // Log the error structure for more details
+    if (error && typeof error === 'object') {
+      if ('name' in error) console.error('[Google GenAI] Error name:', (error as any).name);
+      if ('message' in error) console.error('[Google GenAI] Error message:', (error as any).message);
+      if ('stack' in error) console.error('[Google GenAI] Error stack:', (error as any).stack);
+      if ('response' in error && (error as any).response) {
+        console.error('[Google GenAI] Error response:', JSON.stringify((error as any).response, null, 2));
+      }
+      if ('code' in error) console.error('[Google GenAI] Error code:', (error as any).code);
+    } else {
+      console.error('[Google GenAI] Non-object error:', error);
+    }
+
+    // Log the fileConfig again in case of error (buffer might be too large to log)
+    console.error('[Google GenAI] fileConfig on error:', fileConfig);
+
     throw new Error(`Failed to upload from Blob URL to Gemini: ${(error as Error).message}`);
   }
 }

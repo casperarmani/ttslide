@@ -109,7 +109,6 @@ export default function Home() {
           const blob = await upload(`face/${file.name}`, file, {
             access: 'public',
             handleUploadUrl: '/api/blob/handle-upload',
-            addRandomSuffix: true, // Add a random suffix to prevent duplicates
           });
 
           uploadedBlobs.push({
@@ -132,7 +131,6 @@ export default function Home() {
           const blob = await upload(`faceless/${file.name}`, file, {
             access: 'public',
             handleUploadUrl: '/api/blob/handle-upload',
-            addRandomSuffix: true, // Add a random suffix to prevent duplicates
           });
 
           uploadedBlobs.push({
@@ -155,7 +153,6 @@ export default function Home() {
           const blob = await upload(`product/${file.name}`, file, {
             access: 'public',
             handleUploadUrl: '/api/blob/handle-upload',
-            addRandomSuffix: true, // Add a random suffix to prevent duplicates
           });
 
           uploadedBlobs.push({
