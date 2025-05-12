@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
         // Add file to processed list
         processedFiles.push({
           kind,
-          localUrl,
+          blobUrl: localUrl, // Using blobUrl as per the interface
           geminiFileIdentifier: geminiFileResponse.name, // Store the Gemini file identifier
           geminiFileUri: geminiFileResponse.uri, // This might be undefined in mock mode
           mime: mimeType,

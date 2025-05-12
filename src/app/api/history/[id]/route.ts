@@ -1,13 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getGenerationById } from '@/lib/db';
 
 // Route handler for /api/history/[id]
 export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  // Use awaited params to satisfy Next.js warning
-  const { id } = await Promise.resolve(params);
+  // Get id from params (properly awaiting the promise)
+  const { id } = await params;
 
   if (!id) {
     return NextResponse.json(

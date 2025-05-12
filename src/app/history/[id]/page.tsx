@@ -116,7 +116,7 @@ export default function DetailPage() {
         ) : !generation || !generation.slideshows || generation.slideshows.length === 0 ? (
           <div className="text-center py-16">
             <h2 className="text-xl font-semibold mb-4">No slideshows found</h2>
-            <p className="text-gray-600 mb-8">This generation doesn't contain any valid slideshows.</p>
+            <p className="text-gray-600 mb-8">This generation doesn&apos;t contain any valid slideshows.</p>
             <Link
               href="/history"
               className="bg-black text-white px-4 py-2 rounded-lg inline-flex items-center gap-2 hover:bg-gray-800"
