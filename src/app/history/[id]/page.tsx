@@ -251,6 +251,9 @@ export default function DetailPage() {
                 }}
                 onSlideChange={(swiper) => setActiveSlideshow(swiper.activeIndex)}
                 className="mb-4"
+                noSwiping={true}
+                noSwipingClass="swiper-no-swiping"
+                touchStartPreventDefault={false}
               >
                 {filteredSlideshows.map((slideshow, index) => (
                   <SwiperSlide key={index}>
@@ -260,75 +263,154 @@ export default function DetailPage() {
                       </h3>
                       
                       {/* Mobile view for slideshow frames */}
-                      <div className="sm:hidden">
-                        {/* Mobile scroll hint */}
-                        <div className="flex items-center justify-center text-gray-500 text-xs mb-2">
-                          <span>← Swipe to view all frames →</span>
+                      <div className="sm:hidden swiper-no-swiping">
+                        {/* Using an array state to track visible frame per slideshow */}
+                        <div
+                          className="flex items-center justify-center text-gray-500 text-xs mb-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <span>Use buttons to view all frames</span>
                         </div>
 
-                        {/* Custom frame slider for mobile */}
-                        <div className="relative">
-                          {/* Frame counter */}
-                          <div className="absolute top-2 right-2 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded-full z-10">
-                            <span id={`frame-counter-${index}`}>1/4</span>
-                          </div>
+                        {/* Mobile frame navigation with buttons */}
+                        <div
+                          className="relative"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {/* Frame display */}
+                          <div className="relative">
+                            {/* Frame counter */}
+                            <div className="absolute top-2 right-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded-full z-10">
+                              <span id={`frame-counter-${index}`}>1/{slideshow.images.length}</span>
+                            </div>
 
-                          {/* Mobile swiper - uses CSS scroll snap */}
-                          <div
-                            className="flex overflow-x-auto snap-x snap-mandatory pb-4 -mx-2 px-2"
-                            onScroll={(e) => {
-                              // Update frame counter on scroll
-                              const container = e.currentTarget;
-                              const scrollPos = container.scrollLeft;
-                              const frameWidth = container.scrollWidth / slideshow.images.length;
-                              const currentFrame = Math.min(
-                                Math.floor(scrollPos / frameWidth) + 1,
-                                slideshow.images.length
-                              );
-                              const counter = document.getElementById(`frame-counter-${index}`);
-                              if (counter) {
-                                counter.textContent = `${currentFrame}/${slideshow.images.length}`;
-                              }
-                            }}
-                          >
-                            {slideshow.images.map((image, imgIndex) => (
-                              <div key={imgIndex} className="flex-shrink-0 min-w-[90vw] snap-start flex flex-col pr-2">
-                                <div className="aspect-[9/16] relative rounded-lg overflow-hidden border mb-2">
-                                  <Image
-                                    src={image}
-                                    alt={`Frame ${imgIndex + 1}`}
-                                    fill
-                                    style={{ objectFit: 'cover' }}
-                                    sizes="90vw"
-                                    priority={imgIndex === 0}
-                                  />
+                            {/* Frame container */}
+                            <div className="w-full">
+                              {slideshow.images.map((image, imgIndex) => (
+                                <div
+                                  key={imgIndex}
+                                  id={`slide-${index}-frame-${imgIndex}`}
+                                  className={`w-full ${imgIndex === 0 ? 'block' : 'hidden'}`}
+                                >
+                                  <div className="aspect-[9/16] relative rounded-lg overflow-hidden border mb-2">
+                                    <Image
+                                      src={image}
+                                      alt={`Frame ${imgIndex + 1}`}
+                                      fill
+                                      style={{ objectFit: 'cover' }}
+                                      sizes="(max-width: 640px) 95vw"
+                                      priority={imgIndex === 0}
+                                    />
+                                  </div>
+                                  <div className="flex items-center justify-center gap-1 relative">
+                                    <p className="text-sm text-center font-medium">
+                                      {slideshow.captions[imgIndex]}
+                                    </p>
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        copyToClipboard(slideshow.captions[imgIndex]);
+                                      }}
+                                      className="p-1.5 rounded-full hover:bg-gray-100 opacity-100 flex items-center justify-center"
+                                      aria-label="Copy caption"
+                                      title="Copy caption"
+                                    >
+                                      {copiedCaption === slideshow.captions[imgIndex] ?
+                                        <CheckCircle2 size={16} className="text-green-500" /> :
+                                        <Clipboard size={16} className="text-gray-500" />
+                                      }
+                                    </button>
+                                    {copiedCaption === slideshow.captions[imgIndex] && (
+                                      <span className="absolute -bottom-5 left-1/2 transform -translate-x-1/2 text-xs text-green-500 whitespace-nowrap">
+                                        Copied!
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                                <div className="flex items-center justify-center gap-1 group relative">
-                                  <p className="text-sm text-center font-medium">
-                                    {slideshow.captions[imgIndex]}
-                                  </p>
-                                  <button
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      copyToClipboard(slideshow.captions[imgIndex]);
-                                    }}
-                                    className="p-1.5 rounded-full hover:bg-gray-100 opacity-100 flex items-center justify-center"
-                                    aria-label="Copy caption"
-                                    title="Copy caption"
-                                  >
-                                    {copiedCaption === slideshow.captions[imgIndex] ?
-                                      <CheckCircle2 size={16} className="text-green-500" /> :
-                                      <Clipboard size={16} className="text-gray-500" />
+                              ))}
+                            </div>
+
+                            {/* Frame navigation buttons */}
+                            <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 flex justify-between px-1">
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  const totalFrames = slideshow.images.length;
+
+                                  // Find currently visible frame
+                                  let currentFrameIndex = 0;
+                                  for (let i = 0; i < totalFrames; i++) {
+                                    const frame = document.getElementById(`slide-${index}-frame-${i}`);
+                                    if (frame && window.getComputedStyle(frame).display !== 'none') {
+                                      currentFrameIndex = i;
+                                      break;
                                     }
-                                  </button>
-                                  {copiedCaption === slideshow.captions[imgIndex] && (
-                                    <span className="absolute -bottom-5 left-1/2 transform -translate-x-1/2 text-xs text-green-500 whitespace-nowrap">
-                                      Copied!
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
+                                  }
+
+                                  // Calculate previous frame index
+                                  const prevFrameIndex = (currentFrameIndex - 1 + totalFrames) % totalFrames;
+
+                                  // Hide current frame, show previous frame
+                                  for (let i = 0; i < totalFrames; i++) {
+                                    const frame = document.getElementById(`slide-${index}-frame-${i}`);
+                                    if (frame) {
+                                      frame.style.display = (i === prevFrameIndex) ? 'block' : 'none';
+                                    }
+                                  }
+
+                                  // Update counter
+                                  const counter = document.getElementById(`frame-counter-${index}`);
+                                  if (counter) {
+                                    counter.textContent = `${prevFrameIndex + 1}/${totalFrames}`;
+                                  }
+                                }}
+                                className="bg-black bg-opacity-50 text-white rounded-full p-1 focus:outline-none hover:bg-opacity-70"
+                                aria-label="Previous frame"
+                              >
+                                <ChevronLeft size={24} />
+                              </button>
+
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  const totalFrames = slideshow.images.length;
+
+                                  // Find currently visible frame
+                                  let currentFrameIndex = 0;
+                                  for (let i = 0; i < totalFrames; i++) {
+                                    const frame = document.getElementById(`slide-${index}-frame-${i}`);
+                                    if (frame && window.getComputedStyle(frame).display !== 'none') {
+                                      currentFrameIndex = i;
+                                      break;
+                                    }
+                                  }
+
+                                  // Calculate next frame index
+                                  const nextFrameIndex = (currentFrameIndex + 1) % totalFrames;
+
+                                  // Hide current frame, show next frame
+                                  for (let i = 0; i < totalFrames; i++) {
+                                    const frame = document.getElementById(`slide-${index}-frame-${i}`);
+                                    if (frame) {
+                                      frame.style.display = (i === nextFrameIndex) ? 'block' : 'none';
+                                    }
+                                  }
+
+                                  // Update counter
+                                  const counter = document.getElementById(`frame-counter-${index}`);
+                                  if (counter) {
+                                    counter.textContent = `${nextFrameIndex + 1}/${totalFrames}`;
+                                  }
+                                }}
+                                className="bg-black bg-opacity-50 text-white rounded-full p-1 focus:outline-none hover:bg-opacity-70"
+                                aria-label="Next frame"
+                              >
+                                <ChevronRight size={24} />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
