@@ -6,7 +6,8 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { id } = params;
+  // Use awaited params to satisfy Next.js warning
+  const { id } = await Promise.resolve(params);
 
   if (!id) {
     return NextResponse.json(
