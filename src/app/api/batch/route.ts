@@ -3,6 +3,7 @@ import pLimit from 'p-limit';
 import { BatchRequest, OrderResponse, Slideshow } from '@/lib/types';
 import { deleteGeminiFile } from '@/lib/google';
 import { defaultPrompts } from '@/lib/prompts';
+import { saveGeneration } from '@/lib/db';
 
 // Create stream response for Server-Sent Events
 function createSSEResponse() {
@@ -197,15 +198,43 @@ export async function POST(request: NextRequest) {
       // We continue despite cleanup errors
     }
 
-    // 5. Complete the process
+    // 5. Save to database
+    sendSSEEvent('status', {
+      message: 'Saving generation to database',
+      progress: 95
+    });
+
+    // Save the generation to the database
+    let generationId;
+    try {
+      // Prepare the settings object to save with the slideshows
+      const settingsObj = {
+        systemPrompt,
+        captionPrompt,
+        researchMarkdown,
+        themes,
+        slideshowsPerTheme,
+        framesPerSlideshow
+      };
+
+      // Save to database
+      generationId = await saveGeneration(settingsObj, slideshows);
+      console.log(`Saved generation to database with ID: ${generationId}`);
+    } catch (dbError) {
+      console.error('Error saving to database:', dbError);
+      // Continue even if db save fails - we'll still return data to the client
+    }
+
+    // 6. Complete the process
     sendSSEEvent('status', {
       message: 'Batch processing complete',
       progress: 100
     });
 
-    // Send final data
+    // Send final data with generation ID for redirection
     sendSSEEvent('complete', {
-      slideshows
+      slideshows,
+      id: generationId // Include the generation ID for redirection
     });
 
     return response;

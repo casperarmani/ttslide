@@ -3,11 +3,19 @@
 // Uploaded file information
 export interface UploadedFile {
   kind: 'face' | 'faceless' | 'product';
-  localUrl: string;  // URL to access the file from the browser
+  blobUrl: string;   // Vercel Blob URL for the image
   geminiFileIdentifier: string;  // Gemini File API identifier (name)
   geminiFileUri?: string;        // The URI returned by Gemini File API (if available)
   mime: string;      // MIME type
   originalName?: string; // Original filename
+}
+
+// Client-side upload details before Gemini registration
+export interface BlobUploadDetail {
+  kind: 'face' | 'faceless' | 'product';
+  blobUrl: string;   // Vercel Blob URL
+  mime: string;      // MIME type
+  originalName: string; // Original filename
 }
 
 // Input for ordering API

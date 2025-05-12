@@ -9,7 +9,7 @@ if (!process.env.GEMINI_API_KEY) {
 // Initialize the GoogleGenAI client
 export const gemini = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// Helper to upload a file to the Gemini File API
+// Helper to upload a file to the Gemini File API from a local filesystem path
 export async function uploadFileToGemini(
   filePath: string,
   mimeType: string,
@@ -34,14 +34,14 @@ export async function uploadFileToGemini(
     // The response object directly is the File object
     // It contains: name, displayName, mimeType, sizeBytes, createTime, updateTime, expirationTime, uri
     console.log(`[Google GenAI] File uploaded successfully. Name: ${response.name}, URI: ${response.uri}`);
-    
+
     // Log the URI format we received (should be https:// for the API)
     if (!response.uri) {
       console.warn(`[Google GenAI] Uploaded file but received no URI`);
     } else {
       console.log(`[Google GenAI] Received URI format: ${response.uri.split('/')[0]}//...`);
     }
-    
+
     return {
       name: response.name || '',
       uri: response.uri || '',
@@ -52,6 +52,53 @@ export async function uploadFileToGemini(
   } catch (error) {
     console.error(`[Google GenAI] Error uploading file "${displayName || filePath}":`, error);
     throw new Error(`Failed to upload file to Gemini: ${(error as Error).message}`);
+  }
+}
+
+// Helper to upload a file to the Gemini File API from a Blob URL
+export async function uploadFileToGeminiFromUrl(
+  blobUrl: string,
+  mimeType: string,
+  displayName: string
+): Promise<{ name: string, uri: string, displayName?: string, mimeType: string, sizeBytes: number }> {
+  try {
+    console.log(`[Google GenAI] Uploading from Blob URL to Gemini File API: ${displayName}. MIME type: ${mimeType}`);
+
+    // Fetch the image content from the Blob URL
+    const response = await fetch(blobUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image from Blob URL: ${response.statusText}`);
+    }
+
+    // Convert to buffer
+    const buffer = Buffer.from(await response.arrayBuffer());
+
+    // Create object with file contents for Gemini
+    const fileObject = {
+      contents: buffer,
+    };
+
+    // Upload to Gemini File API
+    const geminiFileResponse = await gemini.files.upload({
+      file: fileObject,
+      config: {
+        mimeType: mimeType,
+        displayName: displayName
+      }
+    });
+
+    console.log(`[Google GenAI] File uploaded successfully. Name: ${geminiFileResponse.name}, URI: ${geminiFileResponse.uri || 'no URI'}`);
+
+    return {
+      name: geminiFileResponse.name || '',
+      uri: geminiFileResponse.uri || '',
+      displayName: geminiFileResponse.displayName,
+      mimeType: geminiFileResponse.mimeType || '',
+      sizeBytes: typeof geminiFileResponse.sizeBytes === 'number' ? geminiFileResponse.sizeBytes : 0
+    };
+  } catch (error) {
+    console.error(`[Google GenAI] Error uploading from Blob URL "${blobUrl}":`, error);
+    throw new Error(`Failed to upload from Blob URL to Gemini: ${(error as Error).message}`);
   }
 }
 

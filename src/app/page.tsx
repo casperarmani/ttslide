@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { UploadedFile } from '@/lib/types';
+import { UploadedFile, BlobUploadDetail } from '@/lib/types';
 import Link from 'next/link';
-import { ArrowRight, Upload } from 'lucide-react';
+import { ArrowRight, History, Upload } from 'lucide-react';
+import { upload } from '@vercel/blob/client';
 
 export default function Home() {
   const [files, setFiles] = useState<{
@@ -91,41 +92,108 @@ export default function Home() {
     try {
       setUploading(true);
       setError(null);
-      
+
       // Check if we have files in each category
       if (!files.face.length || !files.faceless.length || !files.product.length) {
         setError('Please upload files for all three categories.');
         setUploading(false);
         return;
       }
-      
-      // Create FormData
-      const formData = new FormData();
 
-      // Append files with their categories
-      files.face.forEach(file => formData.append('faceFiles', file));
-      files.faceless.forEach(file => formData.append('facelessFiles', file));
-      files.product.forEach(file => formData.append('productFiles', file));
-      
-      // Call upload API
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Upload failed: ${response.statusText}`);
+      // Keep track of uploaded blobs before sending to the API
+      const uploadedBlobs: BlobUploadDetail[] = [];
+
+      // Upload face files to Blob storage
+      for (const file of files.face) {
+        try {
+          const blob = await upload(`face/${file.name}`, file, {
+            access: 'public',
+            handleUploadUrl: '/api/blob/handle-upload',
+            addRandomSuffix: true, // Add a random suffix to prevent duplicates
+          });
+
+          uploadedBlobs.push({
+            kind: 'face',
+            blobUrl: blob.url,
+            mime: file.type || 'image/jpeg',
+            originalName: file.name
+          });
+        } catch (error) {
+          console.error("Blob upload error for face image:", error);
+          setError(`Upload failed for ${file.name}: ${(error as Error).message}`);
+          setUploading(false);
+          return;
+        }
       }
-      
+
+      // Upload faceless files to Blob storage
+      for (const file of files.faceless) {
+        try {
+          const blob = await upload(`faceless/${file.name}`, file, {
+            access: 'public',
+            handleUploadUrl: '/api/blob/handle-upload',
+            addRandomSuffix: true, // Add a random suffix to prevent duplicates
+          });
+
+          uploadedBlobs.push({
+            kind: 'faceless',
+            blobUrl: blob.url,
+            mime: file.type || 'image/jpeg',
+            originalName: file.name
+          });
+        } catch (error) {
+          console.error("Blob upload error for faceless image:", error);
+          setError(`Upload failed for ${file.name}: ${(error as Error).message}`);
+          setUploading(false);
+          return;
+        }
+      }
+
+      // Upload product files to Blob storage
+      for (const file of files.product) {
+        try {
+          const blob = await upload(`product/${file.name}`, file, {
+            access: 'public',
+            handleUploadUrl: '/api/blob/handle-upload',
+            addRandomSuffix: true, // Add a random suffix to prevent duplicates
+          });
+
+          uploadedBlobs.push({
+            kind: 'product',
+            blobUrl: blob.url,
+            mime: file.type || 'image/jpeg',
+            originalName: file.name
+          });
+        } catch (error) {
+          console.error("Blob upload error for product image:", error);
+          setError(`Upload failed for ${file.name}: ${(error as Error).message}`);
+          setUploading(false);
+          return;
+        }
+      }
+
+      // All uploads successful, now register with Gemini via process-uploads API
+      const response = await fetch('/api/process-uploads', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(uploadedBlobs)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Processing uploaded files failed: ${response.statusText}`);
+      }
+
       const data = await response.json();
       setUploadedFiles(data);
-      
+
       // Save uploaded files to localStorage for use on other pages
       localStorage.setItem('uploadedFiles', JSON.stringify(data));
-      
+
       // Redirect to settings page
       window.location.href = '/settings';
-      
+
     } catch (err) {
       console.error('Upload error:', err);
       setError(`Upload failed: ${(err as Error).message}`);
@@ -215,9 +283,12 @@ export default function Home() {
         
         <div className="text-center text-gray-500 text-sm">
           <p>Images will be uploaded to the server for processing. Each slideshow follows a 4-frame narrative.</p>
-          <div className="mt-4 flex justify-center gap-4">
+          <div className="mt-4 flex justify-center gap-6">
             <Link href="/settings" className="text-blue-500 hover:underline flex items-center gap-1">
               Skip to Settings <ArrowRight size={14} />
+            </Link>
+            <Link href="/history" className="text-blue-500 hover:underline flex items-center gap-1">
+              View History <History size={14} />
             </Link>
           </div>
         </div>

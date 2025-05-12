@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { defaultPrompts } from '@/lib/prompts';
 import Link from 'next/link';
 import { UploadedFile } from '@/lib/types';
-import { ArrowLeft, Play, Save, Settings } from 'lucide-react';
+import { ArrowLeft, Database, History, Play, Save, Settings } from 'lucide-react';
 
 export default function SettingsPage() {
   const [orderingPrompt, setOrderingPrompt] = useState(defaultPrompts.ordering);
@@ -179,15 +179,19 @@ export default function SettingsPage() {
                 setProgress(100);
                 setProgressMessage('Batch processing complete. Redirecting...');
 
-                // Save slideshows result
-                localStorage.setItem('slideshows', JSON.stringify(data.slideshows));
-
                 // Clear uploadedFiles to prevent stale Gemini file references
                 // This ensures users will need to re-upload files for subsequent runs
                 localStorage.removeItem('uploadedFiles');
 
                 await reader.cancel(); // Gracefully cancel the reader
-                window.location.href = '/slides';
+
+                // Redirect to the specific generation view if we have an ID
+                if (data.id) {
+                  window.location.href = `/history/${data.id}`;
+                } else {
+                  // Fallback to history page if no ID is returned
+                  window.location.href = '/history';
+                }
                 return;
               } else if (eventName === 'error') {
                 console.error('SSE error event received:', data.message);
@@ -371,14 +375,24 @@ export default function SettingsPage() {
           )}
           
           <div className="mt-8 flex justify-between">
-            <Link
-              href="/"
-              className="border px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-50"
-            >
-              <ArrowLeft size={18} />
-              Back
-            </Link>
-            
+            <div className="flex gap-2">
+              <Link
+                href="/"
+                className="border px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-50"
+              >
+                <ArrowLeft size={18} />
+                Back
+              </Link>
+
+              <Link
+                href="/history"
+                className="border px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-50 text-blue-600"
+              >
+                <History size={18} />
+                View History
+              </Link>
+            </div>
+
             <button
               onClick={generateSlideshows}
               disabled={generating || !uploadedFiles.length}

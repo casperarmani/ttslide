@@ -255,9 +255,9 @@ BEFORE FINALIZING YOUR RESPONSE: Check each identifier in your "images" arrays a
       );
     }
 
-    // Create a mapping from Gemini file identifiers to local URLs
+    // Create a mapping from Gemini file identifiers to Blob URLs
     const identifierToUrlMap = Object.fromEntries(
-      files.map(file => [file.geminiFileIdentifier, file.localUrl])
+      files.map(file => [file.geminiFileIdentifier, file.blobUrl])
     );
 
     // Process the slideshows with enhanced validation
