@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowLeft, Download, ChevronLeft, ChevronRight, Upload, Clipboard, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Download, ChevronLeft, ChevronRight, Upload, Clipboard, CheckCircle2, Copy, AlertTriangle } from 'lucide-react';
 import { Slideshow } from '@/lib/types';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Navigation, Pagination } from 'swiper/modules';
@@ -17,6 +17,9 @@ export default function SlidesPage() {
   const [activeTheme, setActiveTheme] = useState<string | null>(null);
   const [filteredSlideshows, setFilteredSlideshows] = useState<Slideshow[]>([]);
   const [copiedCaption, setCopiedCaption] = useState<string | null>(null);
+  const [copyingImages, setCopyingImages] = useState(false);
+  const [copyImagesSuccess, setCopyImagesSuccess] = useState(false);
+  const [copyImagesError, setCopyImagesError] = useState<string | null>(null);
   
   // Load slideshows from localStorage
   useEffect(() => {
@@ -104,6 +107,79 @@ export default function SlidesPage() {
   // Get unique themes
   const themes = [...new Set(slideshows.map(s => s.theme))];
 
+  // Function to copy all images from the current slideshow to clipboard
+  const handleCopyAllImages = async () => {
+    if (!filteredSlideshows || filteredSlideshows.length === 0) {
+      setCopyImagesError("No slideshow selected or slideshow is empty.");
+      return;
+    }
+    if (!navigator.clipboard || !navigator.clipboard.write) {
+      setCopyImagesError("Clipboard API is not available in your browser or context (requires HTTPS).");
+      console.warn('Clipboard API not available. Ensure page is served over HTTPS.');
+      return;
+    }
+
+    const currentSlideshow = filteredSlideshows[activeSlideshow];
+    if (!currentSlideshow || !currentSlideshow.images || currentSlideshow.images.length === 0) {
+      setCopyImagesError("No images in the current slideshow to copy.");
+      return;
+    }
+
+    setCopyingImages(true);
+    setCopyImagesSuccess(false);
+    setCopyImagesError(null);
+
+    try {
+      const clipboardItems: ClipboardItem[] = [];
+
+      for (const imageUrl of currentSlideshow.images) {
+        const response = await fetch(imageUrl);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch image: ${imageUrl} (${response.status} ${response.statusText})`);
+        }
+        const blob = await response.blob();
+
+        // Determine the correct MIME type
+        let imageMimeType = blob.type;
+        if (!imageMimeType || !imageMimeType.startsWith('image/')) {
+          const extension = imageUrl.split('.').pop()?.toLowerCase();
+          const commonTypes: { [key: string]: string } = {
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'png': 'image/png',
+            'gif': 'image/gif',
+            'webp': 'image/webp',
+            'svg': 'image/svg+xml',
+            'bmp': 'image/bmp'
+          };
+          imageMimeType = extension && commonTypes[extension] ? commonTypes[extension] : 'image/png'; // Default to PNG
+          console.warn(`Original blob type for ${imageUrl} was '${blob.type}'. Inferred/defaulted to '${imageMimeType}'.`);
+        }
+        
+        // Create a new blob with the explicit image MIME type if it was generic or missing
+        const typedBlob = (blob.type === imageMimeType) ? blob : new Blob([blob], { type: imageMimeType });
+
+        clipboardItems.push(new ClipboardItem({ [typedBlob.type]: typedBlob }));
+      }
+
+      await navigator.clipboard.write(clipboardItems);
+      setCopyImagesSuccess(true);
+      setTimeout(() => setCopyImagesSuccess(false), 3000); // Show success message for 3 seconds
+
+    } catch (err) {
+      console.error("Failed to copy images to clipboard:", err);
+      let userMessage = `Error copying images: ${(err as Error).message}.`;
+      if ((err as Error).name === 'NotAllowedError') {
+          userMessage = "Clipboard write permission was denied. Please allow clipboard access in your browser settings.";
+      } else {
+          userMessage += " Your browser or the target application might not support copying multiple images this way. Try downloading instead.";
+      }
+      setCopyImagesError(userMessage);
+    } finally {
+      setCopyingImages(false);
+    }
+  };
+
   // Function to copy caption to clipboard
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
@@ -124,6 +200,33 @@ export default function SlidesPage() {
 
         <div className="flex flex-wrap gap-2">
           <button
+            onClick={handleCopyAllImages}
+            className="bg-purple-600 text-white px-3 py-1.5 md:px-4 md:py-2 text-sm md:text-base rounded-lg flex items-center gap-1 md:gap-2 hover:bg-purple-700 disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={
+              !slideshows ||
+              !filteredSlideshows ||
+              filteredSlideshows.length === 0 ||
+              copyingImages ||
+              !navigator.clipboard?.write // Disable if API not present
+            }
+            title="Copy all images in the current slideshow to clipboard. Pasting behavior varies by application."
+          >
+            {copyingImages ? (
+              'Copying...'
+            ) : copyImagesSuccess ? (
+              <>
+                <CheckCircle2 size={16} className="md:w-[18px] md:h-[18px]" />
+                Copied!
+              </>
+            ) : (
+              <>
+                <Copy size={16} className="md:w-[18px] md:h-[18px]" />
+                Copy Images
+              </>
+            )}
+          </button>
+          
+          <button
             onClick={downloadAllImages}
             className="bg-blue-600 text-white px-3 py-1.5 md:px-4 md:py-2 text-sm md:text-base rounded-lg flex items-center gap-1 md:gap-2 hover:bg-blue-700"
             disabled={!filteredSlideshows || filteredSlideshows.length === 0}
@@ -141,6 +244,15 @@ export default function SlidesPage() {
           </button>
         </div>
       </header>
+      
+      {copyImagesError && (
+        <div className="mx-auto max-w-5xl px-3 py-2">
+          <div className="my-2 p-3 bg-red-50 text-red-700 rounded-md text-sm flex items-center gap-2">
+            <AlertTriangle size={18} />
+            <span>{copyImagesError}</span>
+          </div>
+        </div>
+      )}
       
       <main className="flex-1 container mx-auto px-3 py-4 sm:p-4 max-w-5xl">
         {slideshows.length === 0 ? (
